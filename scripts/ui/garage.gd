@@ -1,0 +1,170 @@
+extends Control
+## Garage / upgrades screen: buy upgrade levels, pick between unlocked
+## vehicles, purchase the second vehicle once affordable.
+
+var money_label: Label
+var upgrades_box: VBoxContainer
+var vehicles_box: HBoxContainer
+
+func _ready() -> void:
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+	var bg := ColorRect.new()
+	bg.color = Color(0.08, 0.1, 0.15)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(bg)
+
+	_build_header()
+	_build_vehicles()
+	_build_upgrades()
+	_build_back_button()
+
+func _build_header() -> void:
+	var title := UITheme.make_label("ГАРАЖ", 34, UITheme.COLOR_ACCENT, true)
+	title.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	title.position = Vector2(24, 16)
+	add_child(title)
+
+	money_label = UITheme.make_label("💰 %d ₽" % SaveManager.get_money(), 24, UITheme.COLOR_TEXT)
+	money_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	money_label.position = Vector2(-220, 22)
+	add_child(money_label)
+
+func _refresh_money() -> void:
+	money_label.text = "💰 %d ₽" % SaveManager.get_money()
+
+func _build_vehicles() -> void:
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", UITheme.panel_style())
+	panel.custom_minimum_size = Vector2(0, 180)
+	add_child(panel)
+	panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_MINSIZE, 24)
+	panel.position.y = 80
+	panel.offset_top = 80
+	panel.offset_bottom = 80 + 180
+
+	var vbox := VBoxContainer.new()
+	panel.add_child(vbox)
+	vbox.add_child(UITheme.make_label("Транспорт", 20, UITheme.COLOR_ACCENT_2, true))
+	vehicles_box = HBoxContainer.new()
+	vehicles_box.add_theme_constant_override("separation", 16)
+	vbox.add_child(vehicles_box)
+	_refresh_vehicles()
+
+func _refresh_vehicles() -> void:
+	for c in vehicles_box.get_children():
+		c.queue_free()
+	var selected := SaveManager.get_selected_vehicle()
+	for def in VehicleCatalog.build():
+		var card := PanelContainer.new()
+		var selected_style := def.id == selected
+		card.add_theme_stylebox_override("panel", UITheme.panel_style(def.body_color.darkened(0.75) if not selected_style else UITheme.COLOR_ACCENT.darkened(0.6), 12, UITheme.COLOR_ACCENT if selected_style else Color(1,1,1,0.08)))
+		card.custom_minimum_size = Vector2(260, 130)
+		vehicles_box.add_child(card)
+
+		var v := VBoxContainer.new()
+		card.add_child(v)
+		v.add_child(UITheme.make_label(def.display_name, 18, UITheme.COLOR_TEXT, true))
+		v.add_child(UITheme.make_label(def.description, 13, UITheme.COLOR_TEXT_DIM))
+		v.add_child(UITheme.make_label("Скорость %.0f | Вместимость %d" % [def.base_max_speed * 3.6, def.base_capacity], 13, UITheme.COLOR_TEXT_DIM))
+
+		var unlocked := SaveManager.is_vehicle_unlocked(def.id)
+		var btn := Button.new()
+		if selected_style:
+			btn.text = "Выбрано"
+			btn.disabled = true
+			UITheme.style_button(btn, UITheme.COLOR_GOOD, Color(0.05,0.05,0.05))
+		elif unlocked:
+			btn.text = "Выбрать"
+			UITheme.style_button(btn, UITheme.COLOR_ACCENT_2, Color(1,1,1))
+			btn.pressed.connect(func():
+				AudioManager.play_ui_click()
+				SaveManager.set_selected_vehicle(def.id)
+				_refresh_vehicles())
+		else:
+			btn.text = "Купить за %d ₽" % def.price
+			UITheme.style_button(btn, UITheme.COLOR_ACCENT, Color(0.05,0.05,0.05))
+			btn.disabled = SaveManager.get_money() < def.price
+			btn.pressed.connect(func():
+				if SaveManager.spend_money(def.price):
+					AudioManager.play_money()
+					SaveManager.unlock_vehicle(def.id)
+					SaveManager.set_selected_vehicle(def.id)
+					_refresh_vehicles()
+					_refresh_upgrades()
+					_refresh_money())
+		v.add_child(btn)
+
+func _build_upgrades() -> void:
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", UITheme.panel_style())
+	panel.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	panel.position = Vector2(24, 280)
+	panel.anchor_right = 1.0
+	panel.offset_right = -24
+	panel.anchor_bottom = 1.0
+	panel.offset_bottom = -24
+	add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	panel.add_child(vbox)
+	vbox.add_child(UITheme.make_label("Улучшения", 20, UITheme.COLOR_ACCENT_2, true))
+	upgrades_box = VBoxContainer.new()
+	upgrades_box.add_theme_constant_override("separation", 10)
+	vbox.add_child(upgrades_box)
+	_refresh_upgrades()
+
+func _refresh_upgrades() -> void:
+	for c in upgrades_box.get_children():
+		c.queue_free()
+	for u in EconomyManager.upgrades:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 14)
+		upgrades_box.add_child(row)
+
+		var name_l := UITheme.make_label(u.display_name, 18, UITheme.COLOR_TEXT, true)
+		name_l.custom_minimum_size = Vector2(140, 0)
+		row.add_child(name_l)
+
+		var level := SaveManager.get_upgrade_level(u.id)
+		var pips := HBoxContainer.new()
+		pips.add_theme_constant_override("separation", 4)
+		row.add_child(pips)
+		for i in range(u.max_level):
+			var pip := ColorRect.new()
+			pip.custom_minimum_size = Vector2(20, 10)
+			pip.color = UITheme.COLOR_ACCENT if i < level else Color(1, 1, 1, 0.15)
+			pips.add_child(pip)
+
+		var desc_l := UITheme.make_label(u.description, 13, UITheme.COLOR_TEXT_DIM)
+		desc_l.custom_minimum_size = Vector2(220, 0)
+		row.add_child(desc_l)
+
+		var cost := u.cost_for_level(level + 1)
+		var btn := Button.new()
+		if level >= u.max_level:
+			btn.text = "Макс. уровень"
+			btn.disabled = true
+			UITheme.style_button(btn, UITheme.COLOR_GOOD, Color(0.05,0.05,0.05))
+		else:
+			btn.text = "Улучшить: %d ₽" % cost
+			UITheme.style_button(btn, UITheme.COLOR_ACCENT, Color(0.05,0.05,0.05))
+			btn.disabled = SaveManager.get_money() < cost
+			var uid := u.id
+			btn.pressed.connect(func():
+				if EconomyManager.purchase_upgrade(uid):
+					_refresh_upgrades()
+					_refresh_money()
+					EventBus.notification.emit("Улучшение куплено!", 1.5))
+		row.add_child(btn)
+
+func _build_back_button() -> void:
+	var btn := Button.new()
+	btn.text = "← Меню"
+	UITheme.style_button(btn, UITheme.COLOR_PANEL.lightened(0.1), UITheme.COLOR_TEXT)
+	btn.custom_minimum_size = Vector2(140, 48)
+	btn.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	btn.position = Vector2(24, 640)
+	add_child(btn)
+	btn.pressed.connect(func():
+		AudioManager.play_ui_click()
+		GameManager.go_to_menu())
