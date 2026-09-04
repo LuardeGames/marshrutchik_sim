@@ -16,12 +16,22 @@ func _ready() -> void:
 	_build_header()
 	_build_vehicles()
 	_build_upgrades()
-	_build_back_button()
 
 func _build_header() -> void:
-	var title := UITheme.make_label("ГАРАЖ", 34, UITheme.COLOR_ACCENT, true)
+	var back_btn := Button.new()
+	back_btn.text = "← Меню"
+	UITheme.style_button(back_btn, UITheme.COLOR_PANEL.lightened(0.15), UITheme.COLOR_TEXT, 18)
+	back_btn.custom_minimum_size = Vector2(120, 44)
+	back_btn.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	back_btn.position = Vector2(24, 14)
+	add_child(back_btn)
+	back_btn.pressed.connect(func():
+		AudioManager.play_ui_click()
+		GameManager.go_to_menu())
+
+	var title := UITheme.make_label("ГАРАЖ", 30, UITheme.COLOR_ACCENT, true)
 	title.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	title.position = Vector2(24, 16)
+	title.position = Vector2(164, 20)
 	add_child(title)
 
 	money_label = UITheme.make_label("💰 %d ₽" % SaveManager.get_money(), 24, UITheme.COLOR_TEXT)
@@ -35,12 +45,12 @@ func _refresh_money() -> void:
 func _build_vehicles() -> void:
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", UITheme.panel_style())
-	panel.custom_minimum_size = Vector2(0, 180)
+	panel.custom_minimum_size = Vector2(0, 200)
 	add_child(panel)
 	panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_MINSIZE, 24)
-	panel.position.y = 80
-	panel.offset_top = 80
-	panel.offset_bottom = 80 + 180
+	panel.position.y = 76
+	panel.offset_top = 76
+	panel.offset_bottom = 76 + 200
 
 	var vbox := VBoxContainer.new()
 	panel.add_child(vbox)
@@ -98,7 +108,7 @@ func _build_upgrades() -> void:
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", UITheme.panel_style())
 	panel.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	panel.position = Vector2(24, 280)
+	panel.position = Vector2(24, 296)
 	panel.anchor_right = 1.0
 	panel.offset_right = -24
 	panel.anchor_bottom = 1.0
@@ -136,7 +146,9 @@ func _refresh_upgrades() -> void:
 			pips.add_child(pip)
 
 		var desc_l := UITheme.make_label(u.description, 13, UITheme.COLOR_TEXT_DIM)
-		desc_l.custom_minimum_size = Vector2(220, 0)
+		desc_l.custom_minimum_size = Vector2(260, 0)
+		desc_l.clip_text = true
+		desc_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(desc_l)
 
 		var cost := u.cost_for_level(level + 1)
@@ -144,10 +156,10 @@ func _refresh_upgrades() -> void:
 		if level >= u.max_level:
 			btn.text = "Макс. уровень"
 			btn.disabled = true
-			UITheme.style_button(btn, UITheme.COLOR_GOOD, Color(0.05,0.05,0.05))
+			UITheme.style_button(btn, UITheme.COLOR_GOOD, Color(0.05,0.05,0.05), 18)
 		else:
 			btn.text = "Улучшить: %d ₽" % cost
-			UITheme.style_button(btn, UITheme.COLOR_ACCENT, Color(0.05,0.05,0.05))
+			UITheme.style_button(btn, UITheme.COLOR_ACCENT, Color(0.05,0.05,0.05), 18)
 			btn.disabled = SaveManager.get_money() < cost
 			var uid := u.id
 			btn.pressed.connect(func():
@@ -155,16 +167,10 @@ func _refresh_upgrades() -> void:
 					_refresh_upgrades()
 					_refresh_money()
 					EventBus.notification.emit("Улучшение куплено!", 1.5))
+		# fixed width so every row's button lines up regardless of label text
+		# length ("Макс. уровень" vs "Улучшить: 1234 ₽") - set AFTER
+		# style_button, which otherwise resets custom_minimum_size to (0,52)
+		# and a varying width there previously shifted whole rows around.
+		btn.custom_minimum_size = Vector2(190, 52)
+		btn.size_flags_horizontal = Control.SIZE_SHRINK_END
 		row.add_child(btn)
-
-func _build_back_button() -> void:
-	var btn := Button.new()
-	btn.text = "← Меню"
-	UITheme.style_button(btn, UITheme.COLOR_PANEL.lightened(0.1), UITheme.COLOR_TEXT)
-	btn.custom_minimum_size = Vector2(140, 48)
-	btn.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	btn.position = Vector2(24, 640)
-	add_child(btn)
-	btn.pressed.connect(func():
-		AudioManager.play_ui_click()
-		GameManager.go_to_menu())

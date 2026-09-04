@@ -20,8 +20,8 @@ func _build_background() -> void:
 	var strip := ColorRect.new()
 	strip.color = Color(0.12, 0.18, 0.24)
 	strip.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	strip.custom_minimum_size = Vector2(0, 220)
-	strip.position.y = -220
+	strip.custom_minimum_size = Vector2(0, 150)
+	strip.position.y = -150
 	add_child(strip)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7

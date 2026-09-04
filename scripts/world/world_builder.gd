@@ -65,19 +65,46 @@ static func _build_environment(parent: Node3D) -> void:
 	sky.sky_material = sky_mat
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	env.ambient_light_energy = 0.7
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.75, 0.8, 0.82)
-	env.fog_density = 0.006
+	env.fog_density = 0.0035
+	env.fog_aerial_perspective = 0.3
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_exposure = 1.05
+	env.ssao_enabled = true
+	env.ssao_radius = 2.0
+	env.ssao_intensity = 1.4
+	env.glow_enabled = true
+	env.glow_intensity = 0.5
+	env.glow_bloom = 0.05
+	env.glow_hdr_threshold = 1.1
+	env.adjustment_enabled = true
+	env.adjustment_brightness = 1.02
+	env.adjustment_contrast = 1.08
+	env.adjustment_saturation = 1.12
 	env_node.environment = env
 	parent.add_child(env_node)
 
+	# Lower, warmer sun angle for long shadows that actually read as shadows
+	# (the previous near-overhead angle left the ground almost flat/shadowless).
 	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-55, -35, 0)
-	sun.light_energy = 1.15
+	sun.rotation_degrees = Vector3(-38, -50, 0)
+	sun.light_energy = 1.35
 	sun.shadow_enabled = true
-	sun.light_color = Color(1.0, 0.97, 0.9)
+	sun.shadow_blur = 1.2
+	sun.directional_shadow_max_distance = 220.0
+	sun.light_color = Color(1.0, 0.95, 0.85)
 	parent.add_child(sun)
+
+	# Cool, dim fill light from the opposite side so shadow-side faces of
+	# buildings aren't pure black - cheap and very cheap on a single mesh pass.
+	var fill := DirectionalLight3D.new()
+	fill.rotation_degrees = Vector3(-25, 130, 0)
+	fill.light_energy = 0.35
+	fill.light_color = Color(0.7, 0.8, 1.0)
+	fill.shadow_enabled = false
+	parent.add_child(fill)
 
 static func _bounds(waypoints: Array[Vector3]) -> Rect2:
 	var min_x := INF
@@ -120,10 +147,14 @@ static func _build_road(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	parent.add_child(road_root)
 	var asphalt := StandardMaterial3D.new()
 	asphalt.albedo_color = Color(0.16, 0.16, 0.17)
+	asphalt.roughness = 0.85
 	var curb_mat := StandardMaterial3D.new()
 	curb_mat.albedo_color = Color(0.82, 0.82, 0.78)
 	var line_mat := StandardMaterial3D.new()
 	line_mat.albedo_color = Color(0.9, 0.85, 0.2)
+	var sidewalk_mat := StandardMaterial3D.new()
+	sidewalk_mat.albedo_color = Color(0.68, 0.66, 0.62)
+	sidewalk_mat.roughness = 0.95
 
 	var n := waypoints.size()
 	for i in range(n):
@@ -172,6 +203,16 @@ static func _build_road(parent: Node3D, waypoints: Array[Vector3]) -> void:
 			curb.rotation.y = angle
 			road_root.add_child(curb)
 
+			var sidewalk := MeshInstance3D.new()
+			var sidewalk_mesh := BoxMesh.new()
+			sidewalk_mesh.size = Vector3(3.2, 0.1, length)
+			sidewalk.mesh = sidewalk_mesh
+			sidewalk.material_override = sidewalk_mat
+			sidewalk.position = mid + perp * side * (ROAD_WIDTH / 2.0 + 1.9)
+			sidewalk.position.y = 0.05
+			sidewalk.rotation.y = angle
+			road_root.add_child(sidewalk)
+
 static func _build_traffic_lights(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	var corner_indices := [2, 7, 10]
 	for idx in corner_indices:
@@ -218,6 +259,17 @@ static func _build_districts(parent: Node3D, waypoints: Array[Vector3], stop_def
 	# generic filler buildings along the rest of the loop for a populated feel
 	_build_filler(parent, waypoints, rng)
 
+## Nudges a base color's value/saturation a little so repeated buildings
+## from the same small palette don't look like identical copy-paste blocks.
+static func _jitter(color: Color, rng: RandomNumberGenerator, amount: float = 0.06) -> Color:
+	var d: float = rng.randf_range(-amount, amount)
+	return Color(
+		clamp(color.r + d, 0.0, 1.0),
+		clamp(color.g + d, 0.0, 1.0),
+		clamp(color.b + d, 0.0, 1.0),
+		color.a
+	)
+
 static func _box(parent: Node3D, pos: Vector3, size: Vector3, color: Color, collide: bool = true, y_rot: float = 0.0) -> Node3D:
 	var root: Node3D
 	if collide:
@@ -236,6 +288,7 @@ static func _box(parent: Node3D, pos: Vector3, size: Vector3, color: Color, coll
 	mesh.size = size
 	mesh_inst.mesh = mesh
 	var mat := StandardMaterial3D.new()
+	mat.roughness = 0.9
 	mat.albedo_color = color
 	mesh_inst.material_override = mat
 	root.add_child(mesh_inst)
@@ -253,7 +306,7 @@ static func _build_residential(parent: Node3D, center: Vector3, perp: Vector3, r
 		var offset := perp * (22.0 + i * 16.0) + tangent * rng.randf_range(-10.0, 10.0)
 		var floors := rng.randi_range(5, 9)
 		var height := floors * 3.0
-		var b := _box(parent, center + offset, Vector3(14.0, height, 12.0), colors[i % colors.size()])
+		var b := _box(parent, center + offset, Vector3(14.0, height, 12.0), _jitter(colors[i % colors.size()], rng))
 		b.position.y = height / 2.0
 		_add_window_band(b, Vector3(14.0, height, 12.0))
 
@@ -331,7 +384,7 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 				var height: float = rng.randf_range(6.0, 16.0)
 				var w: float = rng.randf_range(8.0, 13.0)
 				var d: float = rng.randf_range(8.0, 13.0)
-				var bldg: Node3D = _box(parent, pos + Vector3(0, height / 2.0, 0), Vector3(w, height, d), colors[rng.randi() % colors.size()])
+				var bldg: Node3D = _box(parent, pos + Vector3(0, height / 2.0, 0), Vector3(w, height, d), _jitter(colors[rng.randi() % colors.size()], rng))
 				_add_window_band(bldg, Vector3(w, height, d))
 			# small prop (kiosk/garage) near the road on one side
 			if rng.randf() > 0.5:
