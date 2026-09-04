@@ -46,6 +46,9 @@ func _process(delta: float) -> void:
 	# subtle bob while walking
 	rotation.y = lerp_angle(rotation.y, atan2(to_target.x, to_target.z), 8.0 * delta)
 
+func is_walking() -> bool:
+	return _walking
+
 func react_to_jolt() -> void:
 	# small comedic reaction to harsh braking/turns - visual bump
 	var tw := create_tween()

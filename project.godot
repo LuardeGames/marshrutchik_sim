@@ -72,6 +72,15 @@ doors={
 
 [rendering]
 
+# Web export only supports the Compatibility (GLES3/WebGL2) rendering
+# method - Forward+ and Mobile both need features WebGL2 doesn't have.
+# Setting it as the project-wide default (not just a web override) means
+# what's tested in the editor matches what actually ships to Yandex Games,
+# and it's also the cheapest renderer, which helps FPS on low-end laptops
+# and phones - the target hardware for this build.
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
 textures/canvas_textures/default_texture_filter=1
 environment/defaults/default_clear_color=Color(0.55, 0.72, 0.85, 1)
 anti_aliasing/quality/msaa_3d=1
+textures/vram_compression/import_etc2_astc=true

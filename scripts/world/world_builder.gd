@@ -141,6 +141,14 @@ static func _build_ground(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	body.add_child(mesh_inst)
 	parent.add_child(body)
 
+## Builds the whole road network (asphalt strips, lane dashes, curbs,
+## sidewalks) as four MultiMeshInstance3D batches instead of one
+## MeshInstance3D per piece. The naive version was ~260 separate draw calls
+## just for road dressing (dashed lines alone were ~150, one box each) -
+## everything here shares one unit BoxMesh per batch and gets its per-piece
+## size/rotation/position baked into its MultiMesh instance transform, which
+## collapses that down to 4 draw calls total. Matters a lot for a WebGL
+## export where draw call count is usually the first thing to bite FPS.
 static func _build_road(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	var road_root := Node3D.new()
 	road_root.name = "Road"
@@ -156,6 +164,11 @@ static func _build_road(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	sidewalk_mat.albedo_color = Color(0.68, 0.66, 0.62)
 	sidewalk_mat.roughness = 0.95
 
+	var road_entries: Array = []
+	var dash_entries: Array = []
+	var curb_entries: Array = []
+	var sidewalk_entries: Array = []
+
 	var n := waypoints.size()
 	for i in range(n):
 		var a: Vector3 = waypoints[i]
@@ -165,53 +178,55 @@ static func _build_road(parent: Node3D, waypoints: Array[Vector3]) -> void:
 		var dir := (b - a).normalized()
 		var angle := atan2(dir.x, dir.z)
 
-		var seg := MeshInstance3D.new()
-		var seg_mesh := BoxMesh.new()
-		seg_mesh.size = Vector3(ROAD_WIDTH, 0.12, length)
-		seg.mesh = seg_mesh
-		seg.material_override = asphalt
-		seg.position = Vector3(mid.x, 0.06, mid.z)
-		seg.rotation.y = angle
-		road_root.add_child(seg)
+		road_entries.append({"size": Vector3(ROAD_WIDTH, 0.12, length), "position": Vector3(mid.x, 0.06, mid.z), "y_rot": angle})
 
-		# center dashed line (few short boxes)
+		# center dashed line
 		var dash_count: int = max(2, int(length / 8.0))
 		for d in range(dash_count):
 			if d % 2 != 0:
 				continue
 			var t: float = float(d) / float(dash_count)
 			var dash_pos: Vector3 = a.lerp(b, t)
-			var dash := MeshInstance3D.new()
-			var dash_mesh := BoxMesh.new()
-			dash_mesh.size = Vector3(0.25, 0.02, 3.0)
-			dash.mesh = dash_mesh
-			dash.material_override = line_mat
-			dash.position = Vector3(dash_pos.x, 0.13, dash_pos.z)
-			dash.rotation.y = angle
-			road_root.add_child(dash)
+			dash_entries.append({"size": Vector3(0.25, 0.02, 3.0), "position": Vector3(dash_pos.x, 0.13, dash_pos.z), "y_rot": angle})
 
-		# curbs both sides
+		# curbs + sidewalks, both sides
 		var perp := Vector3(-dir.z, 0, dir.x)
-		for side in [-1.0, 1.0]:
-			var curb := MeshInstance3D.new()
-			var curb_mesh := BoxMesh.new()
-			curb_mesh.size = Vector3(0.35, 0.22, length)
-			curb.mesh = curb_mesh
-			curb.material_override = curb_mat
-			curb.position = mid + perp * side * (ROAD_WIDTH / 2.0 + 0.2)
-			curb.position.y = 0.11
-			curb.rotation.y = angle
-			road_root.add_child(curb)
+		var road_sides: Array[float] = [-1.0, 1.0]
+		for side in road_sides:
+			var curb_pos: Vector3 = mid + perp * side * (ROAD_WIDTH / 2.0 + 0.2)
+			curb_pos.y = 0.11
+			curb_entries.append({"size": Vector3(0.35, 0.22, length), "position": curb_pos, "y_rot": angle})
 
-			var sidewalk := MeshInstance3D.new()
-			var sidewalk_mesh := BoxMesh.new()
-			sidewalk_mesh.size = Vector3(3.2, 0.1, length)
-			sidewalk.mesh = sidewalk_mesh
-			sidewalk.material_override = sidewalk_mat
-			sidewalk.position = mid + perp * side * (ROAD_WIDTH / 2.0 + 1.9)
-			sidewalk.position.y = 0.05
-			sidewalk.rotation.y = angle
-			road_root.add_child(sidewalk)
+			var sidewalk_pos: Vector3 = mid + perp * side * (ROAD_WIDTH / 2.0 + 1.9)
+			sidewalk_pos.y = 0.05
+			sidewalk_entries.append({"size": Vector3(3.2, 0.1, length), "position": sidewalk_pos, "y_rot": angle})
+
+	_multimesh_boxes(road_root, "RoadStrips", asphalt, road_entries)
+	_multimesh_boxes(road_root, "LaneDashes", line_mat, dash_entries)
+	_multimesh_boxes(road_root, "Curbs", curb_mat, curb_entries)
+	_multimesh_boxes(road_root, "Sidewalks", sidewalk_mat, sidewalk_entries)
+
+## Batches a list of {size, position, y_rot} box specs into a single
+## MultiMeshInstance3D (one draw call) using a shared unit BoxMesh scaled
+## per-instance via each entry's MultiMesh transform.
+static func _multimesh_boxes(parent: Node3D, name: String, material: Material, entries: Array) -> void:
+	if entries.is_empty():
+		return
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3.ONE
+	mm.mesh = mesh
+	mm.instance_count = entries.size()
+	for i in range(entries.size()):
+		var e: Dictionary = entries[i]
+		var basis := Basis.from_euler(Vector3(0, e.y_rot, 0)).scaled(e.size)
+		mm.set_instance_transform(i, Transform3D(basis, e.position))
+	var inst := MultiMeshInstance3D.new()
+	inst.multimesh = mm
+	inst.material_override = material
+	inst.name = name
+	parent.add_child(inst)
 
 static func _build_traffic_lights(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	var corner_indices := [2, 7, 10]
@@ -426,37 +441,118 @@ static func _add_window_band(building: Node3D, size: Vector3) -> void:
 	band.material_override = mat
 	building.add_child(band)
 
+## Fills the loop with a populated-feeling backdrop: a near row of full
+## detail buildings (window bands) plus a second, cheaper back row (flat
+## box, no extra mesh) for skyline depth, and roadside shops/kiosks.
+## Segment spacing and spawn odds are tuned for "dense" while keeping the
+## back row cheap (one draw call each) since this runs across the whole
+## ~2.4km loop and total node/mesh count matters for web performance.
 static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: RandomNumberGenerator) -> void:
 	var colors := [Color(0.7, 0.65, 0.6), Color(0.6, 0.62, 0.68), Color(0.68, 0.58, 0.5), Color(0.5, 0.55, 0.5)]
+	var back_colors := [Color(0.62, 0.6, 0.58), Color(0.55, 0.58, 0.62), Color(0.6, 0.54, 0.5)]
+	# Collected instead of built one-MeshInstance3D-at-a-time: with density
+	# this high across the whole ~2.4km loop, that was 400+ draw calls on
+	# its own. Bodies/back-row/windows each become a single MultiMesh batch
+	# below; only a lightweight invisible collision box is still spawned
+	# per near-building (buildings are the one thing you can actually drive
+	# into, so they keep real collision - the back row and windows don't
+	# need any).
+	var front_entries: Array = []
+	var back_entries: Array = []
+	var window_entries: Array = []
 	var n := waypoints.size()
 	for i in range(n):
 		var a: Vector3 = waypoints[i]
 		var b: Vector3 = waypoints[(i + 1) % n]
-		var segments := int(a.distance_to(b) / 40.0)
+		var segments := int(a.distance_to(b) / 26.0)
 		var dir := (b - a).normalized()
 		var perp := Vector3(-dir.z, 0, dir.x)
 		for s in range(segments):
-			if rng.randf() > 0.6:
-				continue
 			var t: float = (s + 0.5) / float(max(segments, 1))
 			var base_pos: Vector3 = a.lerp(b, t)
 			var sides: Array[float] = [-1.0, 1.0]
 			for side in sides:
-				if rng.randf() > 0.55:
+				if rng.randf() > 0.8:
 					continue
-				var dist: float = rng.randf_range(20.0, 36.0)
+				var dist: float = rng.randf_range(19.0, 33.0)
 				var pos: Vector3 = base_pos + perp * side * dist
-				var height: float = rng.randf_range(6.0, 16.0)
+				var height: float = rng.randf_range(6.0, 17.0)
 				var w: float = rng.randf_range(8.0, 13.0)
 				var d: float = rng.randf_range(8.0, 13.0)
-				var bldg: Node3D = _box(parent, pos + Vector3(0, height / 2.0, 0), Vector3(w, height, d), _jitter(colors[rng.randi() % colors.size()], rng))
-				_add_window_band(bldg, Vector3(w, height, d))
+				var size := Vector3(w, height, d)
+				var center := pos + Vector3(0, height / 2.0, 0)
+				front_entries.append({"size": size, "position": center, "y_rot": 0.0, "color": _jitter(colors[rng.randi() % colors.size()], rng)})
+				window_entries.append({"size": size * Vector3(0.92, 0.5, 0.92), "position": center, "y_rot": 0.0})
+				_invisible_collider(parent, center, size)
+				# second, cheaper row further back for a denser skyline
+				if rng.randf() < 0.6:
+					var back_dist: float = dist + rng.randf_range(14.0, 22.0)
+					var back_pos: Vector3 = base_pos + perp * side * back_dist
+					var back_height: float = rng.randf_range(8.0, 22.0)
+					var back_w: float = rng.randf_range(9.0, 15.0)
+					var back_d: float = rng.randf_range(9.0, 15.0)
+					var back_size := Vector3(back_w, back_height, back_d)
+					var back_center := back_pos + Vector3(0, back_height / 2.0, 0)
+					back_entries.append({"size": back_size, "position": back_center, "y_rot": 0.0, "color": _jitter(back_colors[rng.randi() % back_colors.size()], rng, 0.04)})
+					_invisible_collider(parent, back_center, back_size)
 			# small shop/kiosk near the road on one side - real low-poly model
-			if rng.randf() > 0.5:
+			if rng.randf() > 0.35:
 				var kiosk_side: float = -1.0 if rng.randf() > 0.5 else 1.0
 				var kiosk_pos: Vector3 = base_pos + perp * kiosk_side * 11.0
 				var model: String = SHOP_MODELS[rng.randi() % SHOP_MODELS.size()]
 				_model_prop(parent, model, kiosk_pos, rng.randf_range(4.0, 6.0), rng.randf() * TAU)
+
+	var body_mat := StandardMaterial3D.new()
+	body_mat.roughness = 0.9
+	body_mat.vertex_color_use_as_albedo = true
+	_multimesh_colored_boxes(parent, "FillerFront", body_mat, front_entries)
+	_multimesh_colored_boxes(parent, "FillerBack", body_mat, back_entries)
+
+	var window_mat := StandardMaterial3D.new()
+	window_mat.albedo_color = Color(0.55, 0.75, 0.85, 0.7)
+	window_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	window_mat.emission_enabled = true
+	window_mat.emission = Color(0.6, 0.7, 0.5)
+	window_mat.emission_energy_multiplier = 0.15
+	_multimesh_boxes(parent, "FillerWindows", window_mat, window_entries)
+
+## An invisible StaticBody3D collision box - used where a building's visual
+## comes from a MultiMesh batch (which can't carry per-instance collision)
+## but the box should still stop the player from driving through it.
+static func _invisible_collider(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var body := StaticBody3D.new()
+	body.collision_layer = 1
+	var col := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = size
+	col.shape = shape
+	body.add_child(col)
+	body.position = pos
+	parent.add_child(body)
+
+## Same idea as _multimesh_boxes but with a per-instance vertex color
+## (material must have vertex_color_use_as_albedo enabled) so a batch of
+## boxes can still look like a palette of different buildings.
+static func _multimesh_colored_boxes(parent: Node3D, name: String, material: Material, entries: Array) -> void:
+	if entries.is_empty():
+		return
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3.ONE
+	mm.mesh = mesh
+	mm.instance_count = entries.size()
+	for i in range(entries.size()):
+		var e: Dictionary = entries[i]
+		var basis := Basis.from_euler(Vector3(0, e.y_rot, 0)).scaled(e.size)
+		mm.set_instance_transform(i, Transform3D(basis, e.position))
+		mm.set_instance_color(i, e.color)
+	var inst := MultiMeshInstance3D.new()
+	inst.multimesh = mm
+	inst.material_override = material
+	inst.name = name
+	parent.add_child(inst)
 
 static func _build_trees(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	var multimesh := MultiMesh.new()
