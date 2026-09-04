@@ -16,3 +16,6 @@ class_name VehicleDefinition
 @export var width: float = 2.2
 @export var height: float = 2.4
 @export var modern: bool = false
+## Path to a real low-poly .glb model (Kenney Car Kit, CC0). If empty, the
+## controller falls back to the old procedural box body.
+@export var model_path: String = ""

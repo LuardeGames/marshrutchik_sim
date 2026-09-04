@@ -25,6 +25,13 @@ const GRAVITY := 18.0
 const BODY_LEAN_MAX := 0.12
 const COMFORT_CHECK_COOLDOWN := 0.35
 const COLLISION_COOLDOWN := 0.6
+## Single source of truth for "stopped enough to work the doors" - used by
+## the vehicle itself, RouteManager (stop-arrival check) and PassengerManager
+## (board/alight permission). These three used to disagree (1.5 / 0.35 / 0.35
+## m/s), so the doors would visibly open while still rolling just enough
+## that boarding silently never triggered - looked like "0 passengers,
+## always" even though the boarding code itself was fine.
+const DOOR_SPEED_LIMIT := 1.0
 
 var _body_mesh: Node3D
 var _wheel_meshes: Array[MeshInstance3D] = []
@@ -104,7 +111,7 @@ func _handle_input(delta: float) -> void:
 		_toggle_doors()
 
 func _toggle_doors() -> void:
-	if abs(speed) > 1.5:
+	if abs(speed) > DOOR_SPEED_LIMIT:
 		EventBus.notification.emit("Остановите маршрутку, чтобы открыть двери!", 1.5)
 		return
 	doors_open = not doors_open
@@ -197,10 +204,144 @@ func speed_ratio() -> float:
 	return clamp(abs(speed) / max(max_speed, 0.01), 0.0, 1.0)
 
 # ---------------------------------------------------------------------------
-# Procedural low-poly visual build
+# Visual build - real low-poly model (Kenney Car Kit, CC0) when available,
+# procedural boxes as a fallback for any vehicle without one.
 # ---------------------------------------------------------------------------
 
 func _build_visual() -> void:
+	if definition.model_path != "" and ResourceLoader.exists(definition.model_path):
+		_build_visual_from_model()
+	else:
+		_build_visual_procedural()
+
+func _build_visual_from_model() -> void:
+	var d := definition
+	# _body_mesh is a plain wrapper (kept at identity rotation so the
+	# lean/pitch tween in _update_visuals and the headlight/brake-light
+	# placement below both use the normal "front = -Z" convention). The
+	# actual glTF root goes one level deeper since IT needs a 180° flip
+	# (Kenney's own wheel-front-*/wheel-back-* naming shows the model's
+	# front faces local +Z) plus non-uniform scaling to our target size.
+	_body_mesh = Node3D.new()
+	_body_mesh.name = "BodyVisual"
+	add_child(_body_mesh)
+
+	var model_scene: PackedScene = load(definition.model_path)
+	var model_root: Node3D = model_scene.instantiate()
+	model_root.name = "Model"
+	_body_mesh.add_child(model_root)
+
+	var raw_aabb = _collect_visual_aabb(model_root, model_root)
+	var raw_size: Vector3 = raw_aabb.size if raw_aabb != null else Vector3(d.width, d.height, d.length)
+	model_root.scale = Vector3(
+		d.width / max(raw_size.x, 0.01),
+		d.height / max(raw_size.y, 0.01),
+		d.length / max(raw_size.z, 0.01)
+	)
+	model_root.rotation.y = PI
+
+	_wheel_meshes.clear()
+	_recolor_and_collect_wheels(model_root)
+
+	_build_lights_and_extras(d)
+
+## Paints the body/door meshes a single flat color and collects the wheel
+## meshes so _update_visuals can spin them.
+##
+## Kenney's kit ships ONE shared "colormap" material/texture across the
+## whole model - the body's paint pattern (stripes, cab panel, etc.) comes
+## entirely from where each face's UVs sample that palette image, not from
+## separate materials. Duplicating that material and only changing
+## albedo_color just tints the existing multi-color pattern (still visibly
+## striped), so this instead drops the texture and uses a flat
+## StandardMaterial3D for a properly uniform paint job - wheels keep the
+## original textured material so tires/rims stay dark.
+func _recolor_and_collect_wheels(node: Node) -> void:
+	if node is MeshInstance3D:
+		var mi: MeshInstance3D = node
+		if mi.name.begins_with("wheel-"):
+			_wheel_meshes.append(mi)
+		elif mi.name == "body" or mi.name.begins_with("door-"):
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = definition.body_color
+			mat.roughness = 0.5
+			mat.metallic = 0.15
+			mi.set_surface_override_material(0, mat)
+	for c in node.get_children():
+		_recolor_and_collect_wheels(c)
+
+## Headlights, brake lights, collision shape and particle emitters - shared
+## between the real-model and procedural-box visual builds so both drive,
+## collide and light up identically regardless of which body they wear.
+func _build_lights_and_extras(d: VehicleDefinition) -> void:
+	var headlight_mat := StandardMaterial3D.new()
+	headlight_mat.albedo_color = Color(1, 1, 0.9)
+	headlight_mat.emission_enabled = true
+	headlight_mat.emission = Color(1, 1, 0.8)
+	headlight_mat.emission_energy_multiplier = 2.0
+	for side in [-1, 1]:
+		var hl := MeshInstance3D.new()
+		var hl_mesh := BoxMesh.new()
+		hl_mesh.size = Vector3(0.25, 0.18, 0.05)
+		hl.mesh = hl_mesh
+		hl.position = Vector3(side * d.width * 0.35, d.height * 0.32, -d.length / 2.0 - 0.06)
+		hl.material_override = headlight_mat
+		_body_mesh.add_child(hl)
+
+	_headlight = SpotLight3D.new()
+	_headlight.position = Vector3(0, d.height * 0.32, -d.length / 2.0 - 0.2)
+	_headlight.spot_range = 18.0
+	_headlight.spot_angle = 35.0
+	_headlight.light_energy = 1.2
+	_headlight.light_color = Color(1, 1, 0.9)
+	_body_mesh.add_child(_headlight)
+
+	_brake_light_mat = StandardMaterial3D.new()
+	_brake_light_mat.albedo_color = Color(1, 0.1, 0.1)
+	_brake_light_mat.emission_enabled = true
+	_brake_light_mat.emission = Color(1, 0.05, 0.05)
+	_brake_light_mat.emission_energy_multiplier = 0.3
+	for side in [-1, 1]:
+		var bl := MeshInstance3D.new()
+		var bl_mesh := BoxMesh.new()
+		bl_mesh.size = Vector3(0.3, 0.2, 0.05)
+		bl.mesh = bl_mesh
+		bl.position = Vector3(side * d.width * 0.35, d.height * 0.35, d.length / 2.0 + 0.05)
+		bl.material_override = _brake_light_mat
+		_body_mesh.add_child(bl)
+
+	var col := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(d.width, d.height * 0.85, d.length)
+	col.shape = shape
+	col.position = Vector3(0, d.height * 0.5, 0)
+	add_child(col)
+
+	_exhaust_particles = _make_particles(Color(0.6, 0.6, 0.6, 0.5), 0.15, 6)
+	_exhaust_particles.position = Vector3(d.width * 0.3, 0.35, d.length / 2.0 + 0.1)
+	add_child(_exhaust_particles)
+
+	_dust_particles = _make_particles(Color(0.7, 0.6, 0.4, 0.4), 0.25, 10)
+	_dust_particles.position = Vector3(0, 0.15, d.length / 2.0)
+	add_child(_dust_particles)
+
+## Merges the local-space AABBs of every VisualInstance3D under `node`,
+## expressed relative to `root_node`. AABB is a value type in GDScript so
+## this returns a nullable result (null = nothing found yet) instead of
+## mutating a passed-in accumulator.
+func _collect_visual_aabb(node: Node, root_node: Node3D):
+	var result = null
+	if node is VisualInstance3D:
+		var local_aabb: AABB = node.get_aabb()
+		var rel_xform: Transform3D = root_node.global_transform.affine_inverse() * node.global_transform
+		result = rel_xform * local_aabb
+	for c in node.get_children():
+		var child_aabb = _collect_visual_aabb(c, root_node)
+		if child_aabb != null:
+			result = child_aabb if result == null else result.merge(child_aabb)
+	return result
+
+func _build_visual_procedural() -> void:
 	var d := definition
 	_body_mesh = Node3D.new()
 	_body_mesh.name = "BodyVisual"

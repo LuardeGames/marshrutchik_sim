@@ -81,6 +81,27 @@ func _run() -> void:
 			any_waiting = true
 	_check("passengers were generated at stops", any_waiting)
 
+	# --- boarding end-to-end: teleport onto a stop, stop, open doors ---
+	# Regression check for the bug where the vehicle's "doors may open" speed
+	# threshold (was 1.5 m/s) didn't match RouteManager/PassengerManager's
+	# "count as stopped" threshold (was 0.35 m/s) - doors would visibly open
+	# while still rolling just enough that boarding silently never fired,
+	# which looked like "0 passengers, always" in play.
+	var first_stop: StopArea = gameplay.route_manager.stops[0]
+	var waiting_before: int = gameplay.passenger_manager.get_waiting_count(first_stop.stop_id)
+	_check("stop 0 has waiting passengers to test boarding", waiting_before > 0)
+	gameplay.vehicle.global_position = first_stop.global_position + Vector3(0, 0.6, 0)
+	gameplay.vehicle.speed = 0.0
+	gameplay.vehicle.velocity = Vector3.ZERO
+	for i in range(10):
+		await physics_frame
+	_check("vehicle detected inside stop zone after arriving", gameplay.route_manager.player_in_zone == first_stop)
+	gameplay.vehicle._toggle_doors()
+	for i in range(10):
+		await physics_frame
+	_check("passengers board when stopped in zone with doors open", gameplay.vehicle.passengers_aboard > 0)
+	_check("waiting count drops after boarding", gameplay.passenger_manager.get_waiting_count(first_stop.stop_id) < waiting_before)
+
 	# --- simulate a full trip completion programmatically ---
 	GameManager.comfort = 90.0
 	GameManager.trip_time = 120.0

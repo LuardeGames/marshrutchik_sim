@@ -15,10 +15,11 @@ static func build() -> Array[VehicleDefinition]:
 	old.base_acceleration = 6.0
 	old.base_brake_force = 12.0
 	old.base_capacity = 10
-	old.length = 5.6
-	old.width = 2.1
-	old.height = 2.3
+	old.length = 4.4
+	old.width = 1.95
+	old.height = 2.05
 	old.modern = false
+	old.model_path = "res://assets/vehicles/ambulance.glb"
 	list.append(old)
 
 	var modern := VehicleDefinition.new()
@@ -32,10 +33,11 @@ static func build() -> Array[VehicleDefinition]:
 	modern.base_acceleration = 8.5
 	modern.base_brake_force = 15.5
 	modern.base_capacity = 14
-	modern.length = 6.4
-	modern.width = 2.3
-	modern.height = 2.5
+	modern.length = 4.8
+	modern.width = 2.05
+	modern.height = 2.3
 	modern.modern = true
+	modern.model_path = "res://assets/vehicles/van.glb"
 	list.append(modern)
 
 	return list

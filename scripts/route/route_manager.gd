@@ -15,7 +15,6 @@ var player_in_zone: StopArea = null
 var _stopped_properly: bool = false
 var _handled_current_stop: bool = false
 
-const GOOD_STOP_SPEED := 1.2
 const GOOD_STOP_DISTANCE := 3.0
 const FAR_STOP_DISTANCE := 7.0
 
@@ -55,7 +54,7 @@ func _process(_delta: float) -> void:
 		return
 	if _handled_current_stop:
 		return
-	if abs(vehicle.speed) < 0.35:
+	if abs(vehicle.speed) < VehicleController.DOOR_SPEED_LIMIT:
 		var dist := stop.distance_to_pad(vehicle.global_position)
 		var quality := "good"
 		if dist > GOOD_STOP_DISTANCE:

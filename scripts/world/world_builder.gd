@@ -297,6 +297,64 @@ static func _box(parent: Node3D, pos: Vector3, size: Vector3, color: Color, coll
 	parent.add_child(root)
 	return root
 
+## Small real low-poly buildings (Kenney City Kit companion set, CC0) used
+## for shops/kiosks/market stalls - not tall enough to stand in for the
+## apartment blocks, which stay procedural boxes with window bands.
+const SHOP_MODELS := [
+	"res://assets/city/building-type-a.glb",
+	"res://assets/city/building-type-b.glb",
+	"res://assets/city/building-type-c.glb",
+	"res://assets/city/building-type-d.glb",
+	"res://assets/city/building-type-e.glb",
+	"res://assets/city/building-type-f.glb",
+	"res://assets/city/building-type-g.glb",
+	"res://assets/city/building-type-h.glb",
+]
+
+## Instantiates a small building model, uniformly scaled to `target_width`
+## (keeping its natural proportions), with a matching collision box, and
+## returns the root node (position/rotation already applied).
+static func _model_prop(parent: Node3D, model_path: String, pos: Vector3, target_width: float, y_rot: float = 0.0) -> Node3D:
+	if not ResourceLoader.exists(model_path):
+		return _box(parent, pos + Vector3(0, target_width * 0.4, 0), Vector3(target_width, target_width * 0.8, target_width), Color(0.6, 0.55, 0.5))
+	var scene: PackedScene = load(model_path)
+	var root := Node3D.new()
+	parent.add_child(root)
+	root.position = pos
+	root.rotation.y = y_rot
+
+	var inst: Node3D = scene.instantiate()
+	root.add_child(inst)
+	var raw_aabb = _collect_visual_aabb(inst, inst)
+	if raw_aabb != null and raw_aabb.size.x > 0.01:
+		var s: float = target_width / raw_aabb.size.x
+		inst.scale = Vector3(s, s, s)
+		var body := StaticBody3D.new()
+		body.collision_layer = 1
+		var col := CollisionShape3D.new()
+		var shape := BoxShape3D.new()
+		shape.size = raw_aabb.size * s
+		col.shape = shape
+		col.position = (raw_aabb.position + raw_aabb.size / 2.0) * s
+		body.add_child(col)
+		root.add_child(body)
+	return root
+
+## Same AABB-merging trick used by the vehicle controller for its models -
+## duplicated here since WorldBuilder and VehicleController don't share a
+## common base class.
+static func _collect_visual_aabb(node: Node, root_node: Node3D):
+	var result = null
+	if node is VisualInstance3D:
+		var local_aabb: AABB = node.get_aabb()
+		var rel_xform: Transform3D = root_node.global_transform.affine_inverse() * node.global_transform
+		result = rel_xform * local_aabb
+	for c in node.get_children():
+		var child_aabb = _collect_visual_aabb(c, root_node)
+		if child_aabb != null:
+			result = child_aabb if result == null else result.merge(child_aabb)
+	return result
+
 static func _build_residential(parent: Node3D, center: Vector3, perp: Vector3, rng: RandomNumberGenerator) -> void:
 	var colors := [Color(0.75, 0.72, 0.68), Color(0.68, 0.7, 0.75), Color(0.72, 0.65, 0.6)]
 	var tangent := Vector3(perp.z, 0, -perp.x)
@@ -318,6 +376,13 @@ static func _build_market(parent: Node3D, center: Vector3, perp: Vector3, rng: R
 		var b := _box(parent, center + offset, Vector3(3.5, 2.4, 3.0), stall_colors[i % stall_colors.size()])
 		b.position.y = 1.2
 		var roof := _box(parent, center + offset + Vector3(0, 2.5, 0), Vector3(4.0, 0.15, 3.4), Color(0.95, 0.95, 0.95), false)
+
+	# row of small real shopfronts behind the market stalls
+	for i in range(3):
+		var shop_offset := perp * 28.0 + tangent * (i - 1) * 10.0
+		var model: String = SHOP_MODELS[rng.randi() % SHOP_MODELS.size()]
+		var face_road_angle: float = atan2(-perp.x, -perp.z)
+		_model_prop(parent, model, center + shop_offset, rng.randf_range(5.0, 6.0), face_road_angle)
 
 static func _build_clinic(parent: Node3D, center: Vector3, perp: Vector3, rng: RandomNumberGenerator) -> void:
 	var offset := perp * 20.0
@@ -386,11 +451,12 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 				var d: float = rng.randf_range(8.0, 13.0)
 				var bldg: Node3D = _box(parent, pos + Vector3(0, height / 2.0, 0), Vector3(w, height, d), _jitter(colors[rng.randi() % colors.size()], rng))
 				_add_window_band(bldg, Vector3(w, height, d))
-			# small prop (kiosk/garage) near the road on one side
+			# small shop/kiosk near the road on one side - real low-poly model
 			if rng.randf() > 0.5:
 				var kiosk_side: float = -1.0 if rng.randf() > 0.5 else 1.0
-				var kiosk_pos: Vector3 = base_pos + perp * kiosk_side * 10.0
-				_box(parent, kiosk_pos + Vector3(0, 1.1, 0), Vector3(2.2, 2.2, 2.2), Color(0.3, 0.55, 0.35))
+				var kiosk_pos: Vector3 = base_pos + perp * kiosk_side * 11.0
+				var model: String = SHOP_MODELS[rng.randi() % SHOP_MODELS.size()]
+				_model_prop(parent, model, kiosk_pos, rng.randf_range(4.0, 6.0), rng.randf() * TAU)
 
 static func _build_trees(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	var multimesh := MultiMesh.new()

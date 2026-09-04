@@ -79,10 +79,15 @@ func _on_doors_toggled(open: bool) -> void:
 			get_tree().create_timer(0.3).timeout.connect(func(): _maybe_advance(finished))
 		return
 	var stop := route_manager.player_in_zone
-	if stop == null or stop != route_manager.get_next_stop():
+	var next_stop := route_manager.get_next_stop()
+	if stop == null:
+		EventBus.notification.emit("Здесь нет остановки - подъедьте к следующей: %s" % (next_stop.stop_name if next_stop else "?"), 2.0)
 		return
-	if abs(vehicle.speed) > 0.35:
+	if stop != next_stop:
+		EventBus.notification.emit("Это не ваша остановка! Нужна: %s" % (next_stop.stop_name if next_stop else "?"), 2.0)
 		return
+	if abs(vehicle.speed) > VehicleController.DOOR_SPEED_LIMIT:
+		return # vehicle_controller already told the player to stop first
 	_processed_stop = stop
 	_process_stop(stop)
 
