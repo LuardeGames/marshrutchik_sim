@@ -21,15 +21,23 @@ var notification_timer: float = 0.0
 var change_popup: PanelContainer
 var result_layer: Control
 var is_touch_device: bool = false
+var pause_layer: Control
+var route_map: RouteMap
 
 func _ready() -> void:
 	layer = 10
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	is_touch_device = DisplayServer.is_touchscreen_available()
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
+	route_map = RouteMap.new()
+	route_map.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	route_map.position = Vector2(-236, -45)
+	route_map.size = Vector2(220,180)
+	root.add_child(route_map)
 	_build_top_bar(root)
 	_build_route_bar(root)
 	_build_notification(root)
@@ -37,6 +45,7 @@ func _ready() -> void:
 	_build_menu_button(root)
 	if is_touch_device:
 		_build_mobile_controls(root)
+	_build_pause(root)
 	_build_result_screen(root)
 
 	EventBus.notification.connect(_on_notification)
@@ -51,14 +60,18 @@ func bind(v: VehicleController, rm: RouteManager, pm: PassengerManager) -> void:
 	vehicle = v
 	route_manager = rm
 	passenger_manager = pm
+	route_map.vehicle = v
+	route_map.route_manager = rm
 	rm.next_stop_changed.connect(_on_next_stop_changed)
 	_on_next_stop_changed(rm.get_next_stop())
 	_refresh_money()
 
 func _process(delta: float) -> void:
+	if get_tree().paused:
+		return
 	if vehicle:
 		speed_label.text = "%d км/ч" % int(vehicle.get_speed_kmh())
-		passengers_label.text = "🧍 %d / %d" % [vehicle.passengers_aboard, vehicle.capacity]
+		passengers_label.text = "Мест: %d / %d" % [vehicle.passengers_aboard, vehicle.capacity]
 	if notification_timer > 0.0:
 		notification_timer -= delta
 		if notification_timer <= 0.0:
@@ -84,11 +97,11 @@ func _build_top_bar(root: Control) -> void:
 	row1.add_theme_constant_override("separation", 18)
 	vbox.add_child(row1)
 
-	money_label = UITheme.make_label("💰 " + str(SaveManager.get_money()) + " ₽", 24, UITheme.COLOR_ACCENT, true)
+	money_label = UITheme.make_label("" + str(SaveManager.get_money()) + " ₽", 24, UITheme.COLOR_ACCENT, true)
 	row1.add_child(money_label)
 	speed_label = UITheme.make_label("0 км/ч", 24, UITheme.COLOR_TEXT)
 	row1.add_child(speed_label)
-	passengers_label = UITheme.make_label("🧍 0 / 10", 24, UITheme.COLOR_ACCENT_2)
+	passengers_label = UITheme.make_label("Мест: 0 / 10", 24, UITheme.COLOR_ACCENT_2)
 	row1.add_child(passengers_label)
 
 	var comfort_row := HBoxContainer.new()
@@ -127,7 +140,7 @@ func _on_money_earned(_amount: int, _reason: String) -> void:
 
 func _refresh_money() -> void:
 	if money_label:
-		money_label.text = "💰 %d ₽" % SaveManager.get_money()
+		money_label.text = "%d ₽" % SaveManager.get_money()
 
 # ---------------------------------------------------------------------------
 # Route bar: current/next stop + progress dots
@@ -264,7 +277,7 @@ func _build_menu_button(root: Control) -> void:
 	root.add_child(btn)
 	btn.pressed.connect(func():
 		AudioManager.play_ui_click()
-		GameManager.go_to_menu())
+		_set_paused(true))
 
 # ---------------------------------------------------------------------------
 # Mobile touch controls
@@ -333,17 +346,19 @@ func _on_trip_completed(summary: Dictionary) -> void:
 			c.queue_free()
 	await get_tree().process_frame
 
-	var stars := "⭐".repeat(summary.rating) + "☆".repeat(3 - summary.rating)
+	var stars := "★".repeat(summary.rating) + "☆".repeat(3 - summary.rating)
 	vbox.add_child(UITheme.make_label(stars, 26, UITheme.COLOR_ACCENT))
 	vbox.add_child(UITheme.make_label("Пассажиров: %d" % summary.passengers, 18))
 	vbox.add_child(UITheme.make_label("Выручка: %d ₽" % summary.fares, 18))
+	vbox.add_child(UITheme.make_label("Остановки и время: %d ₽" % summary.get("stop_bonus", 0), 18, UITheme.COLOR_GOOD))
 	vbox.add_child(UITheme.make_label("Бонус за комфорт: %d ₽" % summary.comfort_bonus, 18, UITheme.COLOR_GOOD))
 	vbox.add_child(UITheme.make_label("Штрафы: -%d ₽" % summary.penalties, 18, UITheme.COLOR_BAD))
 	vbox.add_child(UITheme.make_label("Время: %s" % GameManager.format_time(summary.time), 18))
 	vbox.add_child(UITheme.make_label("Итог: %d ₽" % summary.total, 24, UITheme.COLOR_ACCENT, true))
 
 	var rewarded_btn := Button.new()
-	rewarded_btn.text = "📺 Удвоить награду (реклама)"
+	rewarded_btn.text = "Удвоить награду (реклама)"
+	rewarded_btn.visible = false # Enable only after real SDK reward validation is implemented.
 	UITheme.style_button(rewarded_btn, UITheme.COLOR_ACCENT_2, Color(1, 1, 1))
 	vbox.add_child(rewarded_btn)
 	rewarded_btn.pressed.connect(func():
@@ -385,3 +400,73 @@ func _on_trip_completed(summary: Dictionary) -> void:
 	result_layer.modulate.a = 0.0
 	var tw := create_tween()
 	tw.tween_property(result_layer, "modulate:a", 1.0, 0.35)
+
+func _build_pause(root: Control) -> void:
+	pause_layer = Control.new()
+	pause_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pause_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	root.add_child(pause_layer)
+	var dim := ColorRect.new()
+	dim.color = Color(0.03,0.05,0.07,0.86)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pause_layer.add_child(dim)
+	var panel := VBoxContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.position = Vector2(-180,-145)
+	panel.custom_minimum_size = Vector2(360,0)
+	panel.add_theme_constant_override("separation",12)
+	pause_layer.add_child(panel)
+	panel.add_child(UITheme.make_label("ПАУЗА",30,UITheme.COLOR_ACCENT,true))
+	var resume := Button.new()
+	resume.text="Продолжить рейс"
+	UITheme.style_button(resume,UITheme.COLOR_GOOD,Color.BLACK)
+	panel.add_child(resume)
+	resume.pressed.connect(func(): _set_paused(false))
+	var recover := Button.new()
+	recover.text="Вернуться на дорогу"
+	UITheme.style_button(recover,UITheme.COLOR_PANEL,UITheme.COLOR_TEXT)
+	panel.add_child(recover)
+	recover.pressed.connect(func():
+		_recover_vehicle()
+		_set_paused(false))
+	var menu := Button.new()
+	menu.text="Завершить рейс и выйти"
+	UITheme.style_button(menu,UITheme.COLOR_PANEL,UITheme.COLOR_TEXT)
+	panel.add_child(menu)
+	menu.pressed.connect(func(): GameManager.go_to_menu())
+	pause_layer.visible=false
+
+func _set_paused(value: bool) -> void:
+	InputState.reset_touch()
+	pause_layer.visible=value
+	get_tree().paused=value
+	AudioManager.set_engine_running(not value)
+
+func _recover_vehicle() -> void:
+	if not vehicle or (passenger_manager and passenger_manager.boarding_pending > 0):
+		return
+	var points:=RouteDefinition.waypoints()
+	var nearest:=Vector3.ZERO
+	var forward:=Vector3.FORWARD
+	var distance:=INF
+	for i in range(points.size()):
+		var a:=points[i]
+		var b:=points[(i+1)%points.size()]
+		var projected:=Geometry3D.get_closest_point_to_segment(vehicle.global_position,a,b)
+		var candidate:=vehicle.global_position.distance_squared_to(projected)
+		if candidate<distance:
+			distance=candidate
+			nearest=projected
+			forward=(b-a).normalized()
+	vehicle.global_position=nearest+Vector3(-forward.z,0,forward.x)*2.5+Vector3(0,0.6,0)
+	vehicle.look_at(vehicle.global_position+forward)
+	vehicle.speed=0.0
+	vehicle.velocity=Vector3.ZERO
+	vehicle.steer_angle=0.0
+	EventBus.notification.emit("Маршрутка снова на дороге",2.0)
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+		if GameManager.state == GameManager.State.DRIVING:
+			_set_paused(not get_tree().paused)
+			get_viewport().set_input_as_handled()

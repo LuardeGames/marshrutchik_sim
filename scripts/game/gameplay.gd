@@ -39,6 +39,7 @@ func _ready() -> void:
 	passenger_manager.name = "PassengerManager"
 	add_child(passenger_manager)
 	passenger_manager.setup(vehicle, route_manager, world, stop_order)
+	vehicle.boarding_manager = passenger_manager
 
 	event_manager = RandomEventManager.new()
 	event_manager.name = "RandomEventManager"
@@ -90,6 +91,7 @@ func _on_harsh_event(kind: String, _strength: float) -> void:
 		passenger_manager.jolt_passengers()
 
 func _on_route_completed() -> void:
+	event_manager.stop()
 	GameManager.complete_trip()
 
 func _maybe_show_tutorial() -> void:

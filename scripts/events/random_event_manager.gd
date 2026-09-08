@@ -20,7 +20,7 @@ func stop() -> void:
 	active = false
 
 func _process(delta: float) -> void:
-	if not active:
+	if not active or not GameManager.trip_running:
 		return
 	_flavor_timer -= delta
 	if _flavor_timer <= 0.0:

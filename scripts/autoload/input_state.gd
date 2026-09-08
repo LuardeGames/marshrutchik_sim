@@ -35,3 +35,15 @@ func consume_doors_pressed() -> bool:
 	var pressed := Input.is_action_just_pressed("doors") or doors_touch_pressed
 	doors_touch_pressed = false
 	return pressed
+
+func reset_touch() -> void:
+	throttle_touch = false
+	brake_touch = false
+	steer_left_touch = false
+	steer_right_touch = false
+	handbrake_touch = false
+	doors_touch_pressed = false
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		reset_touch()

@@ -22,6 +22,7 @@ var waiting: Dictionary = {}
 var aboard: Array[Dictionary] = []
 
 var _processed_stop: StopArea = null
+var boarding_pending: int = 0
 var _boost_boarding_speed: float = 1.0
 
 func setup(vehicle_ref: VehicleController, route_mgr: RouteManager, parent: Node3D, stops_order: Array[int]) -> void:
@@ -42,7 +43,7 @@ func _generate_waiting(stop_id: int) -> void:
 		return # nobody waits to board at the final terminus
 	var stop: StopArea = _stops_by_id.get(stop_id)
 	var list: Array = waiting.get(stop_id, [])
-	var count := randi_range(1, 4)
+	var count := randi_range(4, 8)
 	for i in range(count):
 		var archetype := PassengerCatalog.random_archetype()
 		var dest := _pick_destination(stop_id)
@@ -58,7 +59,7 @@ func _spawn_standing_passenger(stop: StopArea, archetype: PassengerArchetype, in
 	world_parent.add_child(p)
 	p.setup(archetype)
 	var lane_offset: float = (index - (total - 1) / 2.0) * 1.3
-	p.global_position = stop.global_position + Vector3(2.6 + randf_range(-0.4, 0.4), 0, lane_offset)
+	p.global_position = stop.to_global(Vector3(2.6 + randf_range(-0.4, 0.4), 0, lane_offset))
 	var face_target := stop.global_position
 	face_target.y = p.global_position.y
 	if face_target.distance_to(p.global_position) > 0.05:
@@ -82,7 +83,7 @@ func competitor_take_passengers(stop_id: int) -> int:
 	var list: Array = waiting.get(stop_id, [])
 	if list.is_empty():
 		return 0
-	var take: int = min(list.size(), randi_range(1, 3))
+	var take: int = min(maxi(0, list.size()-2), randi_range(1, 3))
 	for i in range(take):
 		var entry: Dictionary = list.pop_front()
 		_despawn_taken_passenger(entry.get("node"))
@@ -163,8 +164,10 @@ func _send_passenger_to_board(entry: Dictionary) -> void:
 	var door_pos := vehicle.global_position + vehicle.global_transform.basis.x * (vehicle.definition.width / 2.0 + 0.3)
 	vehicle.passengers_aboard += 1
 	var speed := 1.6 * _boost_boarding_speed
+	boarding_pending += 1
 	p.walk_to(door_pos, speed)
 	p.arrived.connect(func():
+		boarding_pending -= 1
 		AudioManager.play_boarding()
 		EconomyManager.add_fare(entry.fare)
 		EventBus.passenger_boarded.emit(entry)
@@ -184,7 +187,7 @@ func _reflow_queue(stop: StopArea) -> void:
 		if p == null or not is_instance_valid(p) or p.is_walking():
 			continue
 		var lane_offset: float = (i - (list.size() - 1) / 2.0) * 1.3
-		var target := stop.global_position + Vector3(2.6, 0, lane_offset)
+		var target := stop.to_global(Vector3(2.6, 0, lane_offset))
 		p.walk_to(target, 1.4)
 
 func _alight_passengers(stop: StopArea) -> void:

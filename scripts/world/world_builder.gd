@@ -33,12 +33,13 @@ static func build(parent: Node3D) -> Dictionary:
 
 	_build_districts(parent, waypoints, stop_defs)
 	_build_trees(parent, waypoints)
+	CityDressing.build(parent, waypoints)
 
 	return {
 		"stops": stops,
 		"waypoints": waypoints,
 		"stop_by_waypoint": stop_by_waypoint,
-		"spawn_position": waypoints[0] + _perp_at(waypoints, 0) * -8.0,
+		"spawn_position": waypoints[0] + Vector3(2.5, 0, -14),
 		"spawn_forward_waypoint": waypoints[1],
 	}
 
@@ -65,24 +66,24 @@ static func _build_environment(parent: Node3D) -> void:
 	sky.sky_material = sky_mat
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.7
+	env.ambient_light_energy = 0.38
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.75, 0.8, 0.82)
 	env.fog_density = 0.0035
 	env.fog_aerial_perspective = 0.3
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 1.05
-	env.ssao_enabled = true
+	env.tonemap_exposure = 0.90
+	env.ssao_enabled = false
 	env.ssao_radius = 2.0
 	env.ssao_intensity = 1.4
-	env.glow_enabled = true
+	env.glow_enabled = false
 	env.glow_intensity = 0.5
 	env.glow_bloom = 0.05
 	env.glow_hdr_threshold = 1.1
 	env.adjustment_enabled = true
 	env.adjustment_brightness = 1.02
 	env.adjustment_contrast = 1.08
-	env.adjustment_saturation = 1.12
+	env.adjustment_saturation = 0.92
 	env_node.environment = env
 	parent.add_child(env_node)
 
@@ -90,7 +91,7 @@ static func _build_environment(parent: Node3D) -> void:
 	# (the previous near-overhead angle left the ground almost flat/shadowless).
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-38, -50, 0)
-	sun.light_energy = 1.35
+	sun.light_energy = 0.85
 	sun.shadow_enabled = true
 	sun.shadow_blur = 1.2
 	sun.directional_shadow_max_distance = 220.0
@@ -101,7 +102,7 @@ static func _build_environment(parent: Node3D) -> void:
 	# buildings aren't pure black - cheap and very cheap on a single mesh pass.
 	var fill := DirectionalLight3D.new()
 	fill.rotation_degrees = Vector3(-25, 130, 0)
-	fill.light_energy = 0.35
+	fill.light_energy = 0.16
 	fill.light_color = Color(0.7, 0.8, 1.0)
 	fill.shadow_enabled = false
 	parent.add_child(fill)
@@ -135,8 +136,7 @@ static func _build_ground(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	plane.size = Vector3(b.size.x, 1.0, b.size.y)
 	mesh_inst.mesh = plane
 	mesh_inst.position = shape.position
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.36, 0.5, 0.28)
+	var mat := CityMaterials.surface("ground")
 	mesh_inst.material_override = mat
 	body.add_child(mesh_inst)
 	parent.add_child(body)
@@ -153,16 +153,11 @@ static func _build_road(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	var road_root := Node3D.new()
 	road_root.name = "Road"
 	parent.add_child(road_root)
-	var asphalt := StandardMaterial3D.new()
-	asphalt.albedo_color = Color(0.16, 0.16, 0.17)
-	asphalt.roughness = 0.85
-	var curb_mat := StandardMaterial3D.new()
-	curb_mat.albedo_color = Color(0.82, 0.82, 0.78)
+	var asphalt := CityMaterials.surface("asphalt")
+	var curb_mat := CityMaterials.surface("concrete")
 	var line_mat := StandardMaterial3D.new()
-	line_mat.albedo_color = Color(0.9, 0.85, 0.2)
-	var sidewalk_mat := StandardMaterial3D.new()
-	sidewalk_mat.albedo_color = Color(0.68, 0.66, 0.62)
-	sidewalk_mat.roughness = 0.95
+	line_mat.albedo_color = Color(0.85, 0.84, 0.76)
+	var sidewalk_mat := CityMaterials.surface("paving")
 
 	var road_entries: Array = []
 	var dash_entries: Array = []
@@ -220,7 +215,7 @@ static func _multimesh_boxes(parent: Node3D, name: String, material: Material, e
 	mm.instance_count = entries.size()
 	for i in range(entries.size()):
 		var e: Dictionary = entries[i]
-		var basis := Basis.from_euler(Vector3(0, e.y_rot, 0)).scaled(e.size)
+		var basis := Basis.from_euler(Vector3(0, e.y_rot, 0)) * Basis.from_scale(e.size)
 		mm.set_instance_transform(i, Transform3D(basis, e.position))
 	var inst := MultiMeshInstance3D.new()
 	inst.multimesh = mm
@@ -428,18 +423,17 @@ static func _build_depot(parent: Node3D, center: Vector3, perp: Vector3, rng: Ra
 	_box(parent, center + perp * 22.0 + Vector3(0, 0.05, 0), Vector3(10.0, 0.05, 24.0), Color(0.3, 0.3, 0.3), false)
 
 static func _add_window_band(building: Node3D, size: Vector3) -> void:
-	var band := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
-	mesh.size = Vector3(size.x * 0.92, size.y * 0.5, size.z * 0.92)
-	band.mesh = mesh
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.55, 0.75, 0.85, 0.7)
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.emission_enabled = true
-	mat.emission = Color(0.6, 0.7, 0.5)
-	mat.emission_energy_multiplier = 0.15
-	band.material_override = mat
-	building.add_child(band)
+	for child in building.get_children():
+		if child is MeshInstance3D:
+			var old: StandardMaterial3D = child.material_override
+			child.material_override = CityMaterials.facade(old.albedo_color)
+	# Roof cap, entry canopy, balcony slabs give the facade real depth.
+	_box(building, Vector3(0,size.y/2.0,0),Vector3(size.x+0.35,0.22,size.z+0.35),Color("77796f"),false)
+	_box(building, Vector3(0,-size.y/2.0+1.1,-size.z/2.0-0.035),Vector3(1.3,2.2,0.09),Color("3f625c"),false)
+	_box(building, Vector3(0,-size.y/2.0+2.5,-size.z/2.0-0.6),Vector3(2.4,0.16,1.4),Color("8c918b"),false)
+	for floor_index in range(1,int(size.y/3.0)):
+		_box(building,Vector3(size.x*0.25,-size.y/2.0+float(floor_index)*3.0,-size.z/2.0-0.45),Vector3(2.3,0.18,1.0),Color("aca796"),false)
+		_box(building,Vector3(size.x*0.25,-size.y/2.0+float(floor_index)*3.0+0.52,-size.z/2.0-0.94),Vector3(2.3,0.9,0.10),Color("8b958b"),false)
 
 ## Fills the loop with a populated-feeling backdrop: a near row of full
 ## detail buildings (window bands) plus a second, cheaper back row (flat
@@ -459,7 +453,6 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 	# need any).
 	var front_entries: Array = []
 	var back_entries: Array = []
-	var window_entries: Array = []
 	var n := waypoints.size()
 	for i in range(n):
 		var a: Vector3 = waypoints[i]
@@ -476,22 +469,25 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 					continue
 				var dist: float = rng.randf_range(19.0, 33.0)
 				var pos: Vector3 = base_pos + perp * side * dist
-				var height: float = rng.randf_range(6.0, 17.0)
+				var height: float = float(rng.randi_range(3, 6)) * 3.0
 				var w: float = rng.randf_range(8.0, 13.0)
 				var d: float = rng.randf_range(8.0, 13.0)
 				var size := Vector3(w, height, d)
+				if not _clear_of_road(pos, size, waypoints):
+					continue
 				var center := pos + Vector3(0, height / 2.0, 0)
 				front_entries.append({"size": size, "position": center, "y_rot": 0.0, "color": _jitter(colors[rng.randi() % colors.size()], rng)})
-				window_entries.append({"size": size * Vector3(0.92, 0.5, 0.92), "position": center, "y_rot": 0.0})
 				_invisible_collider(parent, center, size)
 				# second, cheaper row further back for a denser skyline
 				if rng.randf() < 0.6:
 					var back_dist: float = dist + rng.randf_range(14.0, 22.0)
 					var back_pos: Vector3 = base_pos + perp * side * back_dist
-					var back_height: float = rng.randf_range(8.0, 22.0)
+					var back_height: float = float(rng.randi_range(5, 9)) * 3.0
 					var back_w: float = rng.randf_range(9.0, 15.0)
 					var back_d: float = rng.randf_range(9.0, 15.0)
 					var back_size := Vector3(back_w, back_height, back_d)
+					if not _clear_of_road(back_pos, back_size, waypoints):
+						continue
 					var back_center := back_pos + Vector3(0, back_height / 2.0, 0)
 					back_entries.append({"size": back_size, "position": back_center, "y_rot": 0.0, "color": _jitter(back_colors[rng.randi() % back_colors.size()], rng, 0.04)})
 					_invisible_collider(parent, back_center, back_size)
@@ -499,22 +495,14 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 			if rng.randf() > 0.35:
 				var kiosk_side: float = -1.0 if rng.randf() > 0.5 else 1.0
 				var kiosk_pos: Vector3 = base_pos + perp * kiosk_side * 11.0
+				if not _clear_of_road(kiosk_pos, Vector3(6,3,6), waypoints):
+					continue
 				var model: String = SHOP_MODELS[rng.randi() % SHOP_MODELS.size()]
 				_model_prop(parent, model, kiosk_pos, rng.randf_range(4.0, 6.0), rng.randf() * TAU)
 
-	var body_mat := StandardMaterial3D.new()
-	body_mat.roughness = 0.9
-	body_mat.vertex_color_use_as_albedo = true
+	var body_mat := CityMaterials.facade(Color.WHITE, true)
 	_multimesh_colored_boxes(parent, "FillerFront", body_mat, front_entries)
 	_multimesh_colored_boxes(parent, "FillerBack", body_mat, back_entries)
-
-	var window_mat := StandardMaterial3D.new()
-	window_mat.albedo_color = Color(0.55, 0.75, 0.85, 0.7)
-	window_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	window_mat.emission_enabled = true
-	window_mat.emission = Color(0.6, 0.7, 0.5)
-	window_mat.emission_energy_multiplier = 0.15
-	_multimesh_boxes(parent, "FillerWindows", window_mat, window_entries)
 
 ## An invisible StaticBody3D collision box - used where a building's visual
 ## comes from a MultiMesh batch (which can't carry per-instance collision)
@@ -545,7 +533,7 @@ static func _multimesh_colored_boxes(parent: Node3D, name: String, material: Mat
 	mm.instance_count = entries.size()
 	for i in range(entries.size()):
 		var e: Dictionary = entries[i]
-		var basis := Basis.from_euler(Vector3(0, e.y_rot, 0)).scaled(e.size)
+		var basis := Basis.from_euler(Vector3(0, e.y_rot, 0)) * Basis.from_scale(e.size)
 		mm.set_instance_transform(i, Transform3D(basis, e.position))
 		mm.set_instance_color(i, e.color)
 	var inst := MultiMeshInstance3D.new()
@@ -612,3 +600,11 @@ static func _build_trees(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	foliage_mat.albedo_color = Color(0.22, 0.5, 0.24)
 	foliage_inst.material_override = foliage_mat
 	parent.add_child(foliage_inst)
+
+static func _clear_of_road(pos: Vector3, size: Vector3, waypoints: Array[Vector3]) -> bool:
+	var radius := Vector2(size.x,size.z).length()*0.5 + ROAD_WIDTH*0.5 + 0.7
+	for i in range(waypoints.size()):
+		var nearest := Geometry3D.get_closest_point_to_segment(pos,waypoints[i],waypoints[(i+1)%waypoints.size()])
+		if pos.distance_to(nearest) < radius:
+			return false
+	return true

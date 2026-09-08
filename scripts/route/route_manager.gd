@@ -14,6 +14,7 @@ var vehicle: VehicleController
 var player_in_zone: StopArea = null
 var _stopped_properly: bool = false
 var _handled_current_stop: bool = false
+var _route_finished: bool = false
 
 const GOOD_STOP_DISTANCE := 3.0
 const FAR_STOP_DISTANCE := 7.0
@@ -47,7 +48,7 @@ func _on_vehicle_exited(stop: StopArea) -> void:
 			pass # PassengerManager / HUD already nudges player; no hard fail in MVP
 
 func _process(_delta: float) -> void:
-	if vehicle == null or player_in_zone == null:
+	if _route_finished or vehicle == null or player_in_zone == null:
 		return
 	var stop := player_in_zone
 	if stop != get_next_stop():
@@ -65,11 +66,12 @@ func _process(_delta: float) -> void:
 ## Called by PassengerManager once boarding/alighting is finished at the
 ## current stop and doors close (or a short delay elapses), to advance route.
 func advance_to_next_stop() -> void:
-	if stops.is_empty():
+	if _route_finished or stops.is_empty():
 		return
 	var finishing_stop := stops[current_stop_index]
 	_handled_current_stop = false
 	if current_stop_index >= stops.size() - 1:
+		_route_finished = true
 		route_completed.emit()
 		return
 	current_stop_index += 1

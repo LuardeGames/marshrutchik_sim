@@ -34,23 +34,23 @@ func _build_header() -> void:
 	title.position = Vector2(164, 20)
 	add_child(title)
 
-	money_label = UITheme.make_label("💰 %d ₽" % SaveManager.get_money(), 24, UITheme.COLOR_TEXT)
+	money_label = UITheme.make_label("%d ₽" % SaveManager.get_money(), 24, UITheme.COLOR_TEXT)
 	money_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	money_label.position = Vector2(-220, 22)
 	add_child(money_label)
 
 func _refresh_money() -> void:
-	money_label.text = "💰 %d ₽" % SaveManager.get_money()
+	money_label.text = "%d ₽" % SaveManager.get_money()
 
 func _build_vehicles() -> void:
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", UITheme.panel_style())
-	panel.custom_minimum_size = Vector2(0, 200)
+	panel.custom_minimum_size = Vector2(0, 300)
 	add_child(panel)
 	panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_MINSIZE, 24)
 	panel.position.y = 76
 	panel.offset_top = 76
-	panel.offset_bottom = 76 + 200
+	panel.offset_bottom = 76 + 300
 
 	var vbox := VBoxContainer.new()
 	panel.add_child(vbox)
@@ -68,13 +68,19 @@ func _refresh_vehicles() -> void:
 		var card := PanelContainer.new()
 		var selected_style := def.id == selected
 		card.add_theme_stylebox_override("panel", UITheme.panel_style(def.body_color.darkened(0.75) if not selected_style else UITheme.COLOR_ACCENT.darkened(0.6), 12, UITheme.COLOR_ACCENT if selected_style else Color(1,1,1,0.08)))
-		card.custom_minimum_size = Vector2(260, 130)
+		card.custom_minimum_size = Vector2(300, 130)
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		vehicles_box.add_child(card)
 
 		var v := VBoxContainer.new()
 		card.add_child(v)
+		var preview := VehiclePreview.new()
+		v.add_child(preview)
+		preview.setup(def)
 		v.add_child(UITheme.make_label(def.display_name, 18, UITheme.COLOR_TEXT, true))
-		v.add_child(UITheme.make_label(def.description, 13, UITheme.COLOR_TEXT_DIM))
+		var desc := UITheme.make_label(def.description, 13, UITheme.COLOR_TEXT_DIM)
+		desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		v.add_child(desc)
 		v.add_child(UITheme.make_label("Скорость %.0f | Вместимость %d" % [def.base_max_speed * 3.6, def.base_capacity], 13, UITheme.COLOR_TEXT_DIM))
 
 		var unlocked := SaveManager.is_vehicle_unlocked(def.id)
@@ -108,15 +114,18 @@ func _build_upgrades() -> void:
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", UITheme.panel_style())
 	panel.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	panel.position = Vector2(24, 296)
+	panel.position = Vector2(24, 426)
 	panel.anchor_right = 1.0
 	panel.offset_right = -24
 	panel.anchor_bottom = 1.0
 	panel.offset_bottom = -24
 	add_child(panel)
 
+	var scroll := ScrollContainer.new()
+	panel.add_child(scroll)
 	var vbox := VBoxContainer.new()
-	panel.add_child(vbox)
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(vbox)
 	vbox.add_child(UITheme.make_label("Улучшения", 20, UITheme.COLOR_ACCENT_2, true))
 	upgrades_box = VBoxContainer.new()
 	upgrades_box.add_theme_constant_override("separation", 10)
@@ -142,6 +151,7 @@ func _refresh_upgrades() -> void:
 		for i in range(u.max_level):
 			var pip := ColorRect.new()
 			pip.custom_minimum_size = Vector2(20, 10)
+			pip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			pip.color = UITheme.COLOR_ACCENT if i < level else Color(1, 1, 1, 0.15)
 			pips.add_child(pip)
 
@@ -166,6 +176,7 @@ func _refresh_upgrades() -> void:
 				if EconomyManager.purchase_upgrade(uid):
 					_refresh_upgrades()
 					_refresh_money()
+					_refresh_vehicles()
 					EventBus.notification.emit("Улучшение куплено!", 1.5))
 		# fixed width so every row's button lines up regardless of label text
 		# length ("Макс. уровень" vs "Улучшить: 1234 ₽") - set AFTER
