@@ -6,7 +6,7 @@ test_data="$(mktemp -d)"
 trap 'rm -rf "$test_data"' EXIT
 export XDG_DATA_HOME="$test_data"
 "$GODOT_BIN" --headless --path . --editor --import --quit
-for test in smoke_test full_route_test polish_test driving_test; do
+for test in smoke_test full_route_test polish_test driving_test city_roads_test; do
   "$GODOT_BIN" --headless --path . --fixed-fps 60 --script "res://tests/$test.gd"
 done
 

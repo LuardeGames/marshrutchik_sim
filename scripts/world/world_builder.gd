@@ -5,7 +5,7 @@ class_name WorldBuilder
 ## Nothing here needs an external 3D asset.
 
 const ROAD_WIDTH := RouteDefinition.ROAD_WIDTH
-const MAP_MARGIN := 120.0
+const MAP_MARGIN := 300.0
 
 static func build(parent: Node3D) -> Dictionary:
 	var waypoints := RouteDefinition.waypoints()
@@ -32,8 +32,9 @@ static func build(parent: Node3D) -> Dictionary:
 		stop_by_waypoint[wp_index] = def.id
 
 	_build_districts(parent, waypoints, stop_defs)
-	_build_trees(parent, waypoints)
 	CityDressing.build(parent, waypoints)
+	_build_filler(parent, waypoints, RandomNumberGenerator.new())
+	_build_trees(parent, waypoints)
 
 	return {
 		"stops": stops,
@@ -70,8 +71,8 @@ static func _build_environment(parent: Node3D) -> void:
 	env.ambient_light_energy = 0.55
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.75, 0.8, 0.82)
-	env.fog_density = 0.0035
-	env.fog_aerial_perspective = 0.3
+	env.fog_density = 0.00025
+	env.fog_aerial_perspective = 0.0
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.tonemap_exposure = 0.90
 	env.ssao_enabled = false
@@ -92,7 +93,7 @@ static func _build_environment(parent: Node3D) -> void:
 	# (the previous near-overhead angle left the ground almost flat/shadowless).
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-38, -50, 0)
-	sun.light_energy = 0.72
+	sun.light_energy = 0.58
 	sun.shadow_enabled = true
 	sun.shadow_blur = 1.2
 	sun.directional_shadow_max_distance = 220.0
@@ -103,7 +104,7 @@ static func _build_environment(parent: Node3D) -> void:
 	# buildings aren't pure black - cheap and very cheap on a single mesh pass.
 	var fill := DirectionalLight3D.new()
 	fill.rotation_degrees = Vector3(-25, 130, 0)
-	fill.light_energy = 0.16
+	fill.light_energy = 0.10
 	fill.light_color = Color(0.7, 0.8, 1.0)
 	fill.shadow_enabled = false
 	parent.add_child(fill)
@@ -264,7 +265,6 @@ static func _build_districts(parent: Node3D, waypoints: Array[Vector3], stop_def
 			5: _build_depot(parent, center, perp, rng)
 
 	# generic filler buildings along the rest of the loop for a populated feel
-	_build_filler(parent, waypoints, rng)
 
 ## Nudges a base color's value/saturation a little so repeated buildings
 ## from the same small palette don't look like identical copy-paste blocks.
@@ -432,78 +432,68 @@ static func _add_window_band(building: Node3D, size: Vector3) -> void:
 		_box(building,Vector3(size.x*0.25,-size.y/2.0+float(floor_index)*3.0,-size.z/2.0-0.45),Vector3(2.3,0.18,1.0),Color("aca796"),false)
 		_box(building,Vector3(size.x*0.25,-size.y/2.0+float(floor_index)*3.0+0.52,-size.z/2.0-0.94),Vector3(2.3,0.9,0.10),Color("8b958b"),false)
 
-## Fills the loop with a populated-feeling backdrop: a near row of full
-## detail buildings (window bands) plus a second, cheaper back row (flat
-## box, no extra mesh) for skyline depth, and roadside shops/kiosks.
-## Segment spacing and spawn odds are tuned for "dense" while keeping the
-## back row cheap (one draw call each) since this runs across the whole
-## ~2.4km loop and total node/mesh count matters for web performance.
+## Continuous street fronts and deeper residential blocks, with explicit lot
+## reservations so scenery never occupies roads, stops or existing landmarks.
 static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: RandomNumberGenerator) -> void:
-	var colors := [Color(0.7, 0.65, 0.6), Color(0.6, 0.62, 0.68), Color(0.68, 0.58, 0.5), Color(0.5, 0.55, 0.5)]
-	var back_colors := [Color(0.62, 0.6, 0.58), Color(0.55, 0.58, 0.62), Color(0.6, 0.54, 0.5)]
-	# Collected instead of built one-MeshInstance3D-at-a-time: with density
-	# this high across the whole ~2.4km loop, that was 400+ draw calls on
-	# its own. Bodies/back-row/windows each become a single MultiMesh batch
-	# below; only a lightweight invisible collision box is still spawned
-	# per near-building (buildings are the one thing you can actually drive
-	# into, so they keep real collision - the back row and windows don't
-	# need any).
+	rng.seed = 82371
 	var front_entries: Array = []
 	var back_entries: Array = []
-	var n := waypoints.size()
-	for i in range(n):
-		var a: Vector3 = waypoints[i]
-		var b: Vector3 = waypoints[(i + 1) % n]
-		var segments := int(a.distance_to(b) / 26.0)
-		var dir := (b - a).normalized()
-		var perp := Vector3(-dir.z, 0, dir.x)
-		for s in range(segments):
-			var t: float = (s + 0.5) / float(max(segments, 1))
-			var base_pos: Vector3 = a.lerp(b, t)
-			var sides: Array[float] = [-1.0, 1.0]
-			for side in sides:
-				if rng.randf() > 0.8:
-					continue
-				var dist: float = rng.randf_range(19.0, 33.0)
-				var pos: Vector3 = base_pos + perp * side * dist
-				var height: float = float(rng.randi_range(3, 6)) * 3.0
-				var w: float = rng.randf_range(8.0, 13.0)
-				var d: float = rng.randf_range(8.0, 13.0)
-				var size := Vector3(w, height, d)
-				if not _clear_of_road(pos, size, waypoints):
-					continue
-				var center := pos + Vector3(0, height / 2.0, 0)
-				front_entries.append({"size": size, "position": center, "y_rot": 0.0, "color": _jitter(colors[rng.randi() % colors.size()], rng)})
-				_invisible_collider(parent, center, size)
-				# second, cheaper row further back for a denser skyline
-				if rng.randf() < 0.6:
-					var back_dist: float = dist + rng.randf_range(14.0, 22.0)
-					var back_pos: Vector3 = base_pos + perp * side * back_dist
-					var back_height: float = float(rng.randi_range(5, 9)) * 3.0
-					var back_w: float = rng.randf_range(9.0, 15.0)
-					var back_d: float = rng.randf_range(9.0, 15.0)
-					var back_size := Vector3(back_w, back_height, back_d)
-					if not _clear_of_road(back_pos, back_size, waypoints):
-						continue
-					var back_center := back_pos + Vector3(0, back_height / 2.0, 0)
-					back_entries.append({"size": back_size, "position": back_center, "y_rot": 0.0, "color": _jitter(back_colors[rng.randi() % back_colors.size()], rng, 0.04)})
-					_invisible_collider(parent, back_center, back_size)
-			# small shop/kiosk near the road on one side - real low-poly model
-			if rng.randf() > 0.35:
-				var kiosk_side: float = -1.0 if rng.randf() > 0.5 else 1.0
-				var kiosk_pos: Vector3 = base_pos + perp * kiosk_side * 11.0
-				if not _clear_of_road(kiosk_pos, Vector3(6,3,6), waypoints):
-					continue
-				var model: String = SHOP_MODELS[rng.randi() % SHOP_MODELS.size()]
-				_model_prop(parent, model, kiosk_pos, rng.randf_range(4.0, 6.0), rng.randf() * TAU)
+	var occupied: Array[Rect2] = []
+	_collect_occupied(parent, occupied)
+	var streets: Array = []
+	for i in range(waypoints.size()):
+		streets.append([waypoints[i], waypoints[(i+1)%waypoints.size()]])
+	var ring: Array[Vector3] = [Vector3(-140,0,-600),Vector3(760,0,-600),Vector3(760,0,280),Vector3(-140,0,280)]
+	_build_road(parent, ring)
+	for i in range(4):
+		streets.append([ring[i],ring[(i+1)%4]])
+	var links: Array = [[Vector3(-140,0,-140),Vector3(0,0,-140)], [Vector3(300,0,-600),Vector3(300,0,-460)], [Vector3(760,0,-140),Vector3(620,0,-140)], [Vector3(300,0,280),Vector3(300,0,140)]]
+	var link_surfaces: Array = []
+	for link in links:
+		streets.append(link)
+		var delta: Vector3 = link[1]-link[0]
+		link_surfaces.append({"size":Vector3(10,0.14,delta.length()+10),"position":(link[0]+link[1])*0.5+Vector3(0,0.07,0),"y_rot":atan2(delta.x,delta.z)})
+	_multimesh_boxes(parent,"ConnectingStreets",CityMaterials.surface("asphalt"),link_surfaces)
+	var reserved: Array[Rect2] = []
+	for street in streets:
+		var a: Vector3 = street[0]
+		var b: Vector3 = street[1]
+		reserved.append(Rect2(Vector2(minf(a.x,b.x),minf(a.z,b.z)),Vector2(absf(b.x-a.x),absf(b.z-a.z))).grow(9.5))
+	for stop in RouteDefinition.stops():
+		var p := RouteDefinition.stop_position(stop.waypoint_index)
+		reserved.append(Rect2(Vector2(p.x-16,p.z-16),Vector2(32,32)))
+	# Long apartment slabs line both sides; a second row closes the skyline.
+	for street in streets:
+		var a: Vector3 = street[0]
+		var b: Vector3 = street[1]
+		var dir: Vector3 = (b-a).normalized()
+		var perp := Vector3(-dir.z,0,dir.x)
+		var count := int(a.distance_to(b)/40.0)
+		for i in range(count):
+			for side in [-1.0,1.0]:
+				for row in range(2):
+					var pos: Vector3 = a.lerp(b,(i+0.5)/float(count))+perp*side*(19.0+row*42.0)
+					var size := Vector3(30, float(rng.randi_range(5,9))*3,12) if absf(dir.x)>0.5 else Vector3(12,float(rng.randi_range(5,9))*3,30)
+					_place_city_block(parent,pos,size,reserved,occupied,front_entries,rng)
+	# Fill the interior and extend beyond the outer avenue. Alternating slab
+	# orientation leaves connected courtyards instead of isolated towers.
+	for x in range(-240,881,42):
+		for z in range(-700,381,42):
+			var pos := Vector3(x,0,z)
+			var size := Vector3(30,float(rng.randi_range(5,12))*3,12) if (x/42+z/42)%2==0 else Vector3(12,float(rng.randi_range(5,12))*3,30)
+			_place_city_block(parent,pos,size,reserved,occupied,front_entries,rng)
+	parent.set_meta("city_buildings",front_entries.size())
+	parent.set_meta("city_streets",streets)
 
 	var body_mat := CityMaterials.facade(Color.WHITE, true)
 	_multimesh_colored_boxes(parent, "FillerFront", body_mat, front_entries)
 	_multimesh_colored_boxes(parent, "FillerBack", body_mat, back_entries)
+	var walks: Array=[]
 	var roofs: Array=[]
 	var balconies: Array=[]
 	var doors: Array=[]
 	for e in front_entries:
+		walks.append({"size":Vector3(e.size.x+3,0.08,e.size.z+3),"position":Vector3(e.position.x,0.04,e.position.z),"y_rot":0.0})
 		roofs.append({"size":Vector3(e.size.x+0.25,0.18,e.size.z+0.25),"position":e.position+Vector3(0,e.size.y/2.0,0),"y_rot":0.0})
 		var front_z: float=e.position.z-e.size.z/2.0
 		doors.append({"size":Vector3(1.2,2.1,0.05),"position":Vector3(e.position.x,1.05,front_z-0.03),"y_rot":0.0})
@@ -513,9 +503,34 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 			var y:=float(floor_index)*3.0+0.3
 			balconies.append({"size":Vector3(2.2,0.14,0.95),"position":Vector3(balcony_x,y,front_z-0.45),"y_rot":0.0})
 			balconies.append({"size":Vector3(2.2,0.82,0.08),"position":Vector3(balcony_x,y+0.45,front_z-0.89),"y_rot":0.0})
+	_multimesh_boxes(parent,"ApartmentFootpaths",CityMaterials.surface("paving"),walks)
 	_multimesh_boxes(parent,"RoofCapsAndCanopies",BusVisual.material(Color("697167")),roofs)
 	_multimesh_boxes(parent,"BalconyPanels",BusVisual.material(Color("899184")),balconies)
 	_multimesh_boxes(parent,"EntranceDoors",BusVisual.material(Color("3d5851")),doors)
+
+
+static func _collect_occupied(node: Node, occupied: Array[Rect2]) -> void:
+	if node.name == "GroundBody":
+		return
+	if node is CollisionShape3D and node.shape is BoxShape3D and node.get_parent() is StaticBody3D:
+		var box: AABB = node.global_transform * AABB(-node.shape.size*0.5,node.shape.size)
+		occupied.append(Rect2(Vector2(box.position.x,box.position.z),Vector2(box.size.x,box.size.z)).grow(2.0))
+	for child in node.get_children():
+		_collect_occupied(child,occupied)
+
+static func _place_city_block(parent: Node3D, pos: Vector3, size: Vector3, reserved: Array[Rect2], occupied: Array[Rect2], entries: Array, rng: RandomNumberGenerator) -> void:
+	var lot := Rect2(Vector2(pos.x-size.x/2,pos.z-size.z/2),Vector2(size.x,size.z)).grow(2.0)
+	for rect in reserved:
+		if lot.intersects(rect):
+			return
+	for rect in occupied:
+		if lot.intersects(rect):
+			return
+	occupied.append(lot)
+	var colors := [Color("aba699"),Color("929f9d"),Color("ad9a89"),Color("959aa6"),Color("b5ae99")]
+	var center := pos+Vector3(0,size.y/2,0)
+	entries.append({"size":size,"position":center,"y_rot":0.0,"color":colors[rng.randi()%colors.size()]})
+	_invisible_collider(parent,center,size)
 
 
 ## An invisible StaticBody3D collision box - used where a building's visual

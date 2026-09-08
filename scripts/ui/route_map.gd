@@ -13,10 +13,14 @@ func _process(_delta: float) -> void:
 	queue_redraw()
 
 func _map(pos: Vector3) -> Vector2:
-	return Vector2(18,18)+Vector2((pos.x+20)/680.0,(pos.z+480)/650.0)*Vector2(184,142)
+	return Vector2(18,18)+Vector2((pos.x+170)/960.0,(pos.z+630)/940.0)*Vector2(184,142)
 
 func _draw() -> void:
 	draw_style_box(UITheme.panel_style(Color(0.06,0.09,0.11,0.90)),Rect2(Vector2.ZERO,size))
+	if vehicle and is_instance_valid(vehicle):
+		var world := vehicle.get_parent()
+		for street in world.get_meta("city_streets",[]):
+			draw_line(_map(street[0]),_map(street[1]),Color("465955"),1.0,true)
 	for i in range(points.size()):
 		draw_line(_map(points[i]),_map(points[(i+1)%points.size()]),Color("7b8988"),3.0,true)
 		var midpoint:=_map(points[i].lerp(points[(i+1)%points.size()],0.5))
