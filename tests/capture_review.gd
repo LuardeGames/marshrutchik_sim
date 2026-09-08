@@ -6,7 +6,7 @@ func _initialize() -> void:
 	call_deferred("run")
 
 func capture(filename: String) -> void:
-	for i in range(12):
+	for i in range(4):
 		await process_frame
 	await RenderingServer.frame_post_draw
 	root.get_texture().get_image().save_png(output+"/"+filename+".png")
@@ -32,9 +32,24 @@ func run() -> void:
 	game.camera_rig.set_physics_process(false)
 	game.vehicle.global_position=Vector3(2.5,0.13,-55)
 	game.vehicle.rotation=Vector3.ZERO
-	game.camera_rig.camera.global_position=Vector3(9,4.7,-44)
+	game.camera_rig.camera.global_position=Vector3(3.5,4.7,-44)
 	game.camera_rig.camera.look_at(game.vehicle.global_position+Vector3(0,1,-3))
 	await capture("city")
+	var stop: StopArea=game.route_manager.stops[0]
+	game.vehicle.global_position=stop.global_position+Vector3(0,0.15,0)
+	game.vehicle.look_at(game.vehicle.global_position+RouteDefinition.stop_forward(stop.waypoint_index))
+	game.camera_rig.camera.global_position=stop.to_global(Vector3(-6,5,9))
+	game.camera_rig.camera.look_at(stop.to_global(Vector3(2,1,0)))
+	await capture("stop")
+	game.hud._set_paused(true)
+	await capture("pause")
+	game.hud.settings.show()
+	await capture("settings")
+	game.hud.settings.hide()
+	game.hud._set_paused(false)
+	gm.complete_trip()
+	await capture("results")
+	game.vehicle.global_position=Vector3(2.5,0.13,-55)
 	game.hud.visible=false
 	game.vehicle.queue_free()
 	var vehicles:=VehicleCatalog.build()
@@ -43,7 +58,7 @@ func run() -> void:
 		game.world.add_child(bus)
 		bus.position=Vector3(2.5,0.13,-55)
 		BusVisual.build(bus,vehicles[i])
-		game.camera_rig.camera.global_position=Vector3(9.5,4.2,-64)
+		game.camera_rig.camera.global_position=Vector3(7,3.4,-62)
 		game.camera_rig.camera.look_at(bus.global_position+Vector3(0,1,0))
 		await capture("gazelle" if i==0 else "paz")
 		bus.queue_free()

@@ -43,6 +43,7 @@ var _headlight: SpotLight3D
 var _exhaust_particles: GPUParticles3D
 var _dust_particles: GPUParticles3D
 
+var _horn_cooldown: float = 0.0
 var _prev_speed: float = 0.0
 var _comfort_cooldown: float = 0.0
 var _collision_cooldown: float = 0.0
@@ -57,6 +58,7 @@ func _ready() -> void:
 	_apply_definition()
 	_build_visual()
 	AudioManager.set_engine_running(true)
+	AudioManager.set_vehicle_type(definition.modern)
 
 func _apply_definition() -> void:
 	var engine_mult := EconomyManager.get_upgrade_multiplier("engine")
@@ -91,7 +93,7 @@ func _handle_input(delta: float) -> void:
 		speed += acceleration * delta
 	elif brake > 0.0:
 		if speed > 0.0:
-			speed -= brake_force * delta
+			speed = maxf(0.0, speed - brake_force * delta)
 		else:
 			speed -= (acceleration * 0.6) * delta
 	else:
@@ -117,6 +119,10 @@ func _handle_input(delta: float) -> void:
 		var turn_fraction: float = steer_angle / STEER_MAX
 		rotate_y(-turn_fraction * MAX_TURN_RATE * turn_dir * steer_authority * delta)
 
+	if Input.is_physical_key_pressed(KEY_H) and _horn_cooldown <= 0.0:
+		AudioManager.play_horn(definition.modern)
+		_horn_cooldown=0.7
+	_horn_cooldown=maxf(0.0,_horn_cooldown-delta)
 	if InputState.consume_doors_pressed():
 		_toggle_doors()
 
@@ -168,7 +174,8 @@ func _move(delta: float) -> void:
 
 func _update_visuals(delta: float) -> void:
 	if _passenger_door:
-		var target := _door_origin + (Vector3(0.12,0,0.86) if doors_open else Vector3.ZERO)
+		var target := _door_origin + (Vector3(0.12,0,0.86) if doors_open and not definition.modern else Vector3.ZERO)
+		_passenger_door.rotation.y=lerpf(_passenger_door.rotation.y, -1.15 if doors_open and definition.modern else 0.0,minf(delta*6.0,1.0))
 		_passenger_door.position = _passenger_door.position.lerp(target, minf(delta*6.0,1.0))
 	if _body_mesh:
 		var target_lean: float = clamp(-steer_angle * 1.4, -BODY_LEAN_MAX, BODY_LEAN_MAX)
@@ -235,20 +242,6 @@ func _build_visual() -> void:
 	_build_lights_and_extras(definition)
 
 func _build_lights_and_extras(d: VehicleDefinition) -> void:
-	var headlight_mat := StandardMaterial3D.new()
-	headlight_mat.albedo_color = Color(1, 1, 0.9)
-	headlight_mat.emission_enabled = true
-	headlight_mat.emission = Color(1, 1, 0.8)
-	headlight_mat.emission_energy_multiplier = 2.0
-	for side in [-1, 1]:
-		var hl := MeshInstance3D.new()
-		var hl_mesh := BoxMesh.new()
-		hl_mesh.size = Vector3(0.25, 0.18, 0.05)
-		hl.mesh = hl_mesh
-		hl.position = Vector3(side * d.width * 0.35, d.height * 0.32, -d.length / 2.0 - 0.06)
-		hl.material_override = headlight_mat
-		_body_mesh.add_child(hl)
-
 	_headlight = SpotLight3D.new()
 	_headlight.position = Vector3(0, d.height * 0.32, -d.length / 2.0 - 0.2)
 	_headlight.spot_range = 18.0
@@ -275,7 +268,7 @@ func _build_lights_and_extras(d: VehicleDefinition) -> void:
 	var shape := BoxShape3D.new()
 	shape.size = Vector3(d.width, d.height * 0.85, d.length)
 	col.shape = shape
-	col.position = Vector3(0, d.height * 0.5, 0)
+	col.position = Vector3(0, d.height * 0.425 - 0.13, 0)
 	add_child(col)
 
 	_exhaust_particles = _make_particles(Color(0.6, 0.6, 0.6, 0.5), 0.15, 6)
@@ -312,3 +305,9 @@ func _make_particles(color: Color, size: float, amount: int) -> GPUParticles3D:
 	mesh.material = pmat
 	particles.draw_pass_1 = mesh
 	return particles
+
+func get_door_position() -> Vector3:
+	return to_global(_door_origin + Vector3(0.3,0,0))
+
+func _exit_tree() -> void:
+	AudioManager.set_engine_running(false)

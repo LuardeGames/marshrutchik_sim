@@ -16,18 +16,18 @@ func setup(definition: VehicleDefinition) -> void:
 	BusVisual.build(world,definition)
 	var light := DirectionalLight3D.new()
 	light.rotation_degrees = Vector3(-35,-35,0)
-	light.light_energy = 1.5
+	light.light_energy = 0.9
 	world.add_child(light)
 	var environment := WorldEnvironment.new()
 	environment.environment = Environment.new()
 	environment.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.environment.ambient_light_color = Color("a3b7c5")
-	environment.environment.ambient_light_energy = 0.7
+	environment.environment.ambient_light_energy = 0.5
 	world.add_child(environment)
 	var camera := Camera3D.new()
 	camera.position = Vector3(7,4.2,-8)
 	world.add_child(camera)
 	camera.look_at(Vector3(0,definition.height*0.48,0))
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.size = 4.5
+	camera.size = 3.7
 	camera.current = true

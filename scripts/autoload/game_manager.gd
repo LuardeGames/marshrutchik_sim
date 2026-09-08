@@ -47,6 +47,7 @@ func go_to_garage() -> void:
 	get_tree().paused = false
 	InputState.reset_touch()
 	state = State.GARAGE
+	trip_running = false
 	get_tree().change_scene_to_file(GARAGE_SCENE)
 
 func _process(delta: float) -> void:
@@ -95,7 +96,13 @@ func complete_trip() -> Dictionary:
 	var rating := _compute_rating(total)
 	SaveManager.register_trip_result(total, rating)
 
+	var mastered_before := bool(SaveManager.data.get("route_mastered", false))
+	var mastered := rating == 3 and SaveManager.get_selected_vehicle() == "modern_microbus"
+	if mastered:
+		SaveManager.data["route_mastered"] = true
+		SaveManager.save_game()
 	var summary := {
+		"mastered_now": mastered and not mastered_before,
 		"passengers": passengers_delivered,
 		"fares": EconomyManager.trip_fares,
 		"comfort_bonus": EconomyManager.trip_comfort_bonus,

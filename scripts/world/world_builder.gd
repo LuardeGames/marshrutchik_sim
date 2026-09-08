@@ -25,8 +25,8 @@ static func build(parent: Node3D) -> Dictionary:
 		parent.add_child(stop)
 		var pos: Vector3 = waypoints[wp_index]
 		var perp := _perp_at(waypoints, wp_index)
-		stop.position = pos + perp * (ROAD_WIDTH / 2.0 + 3.5)
-		stop.look_at(pos, Vector3.UP)
+		stop.position = RouteDefinition.stop_position(wp_index)
+		stop.look_at(stop.position + RouteDefinition.stop_forward(wp_index), Vector3.UP)
 		stop.setup(def.id, def.name, def.required, wp_index)
 		stops.append(stop)
 		stop_by_waypoint[wp_index] = def.id
@@ -65,8 +65,9 @@ static func _build_environment(parent: Node3D) -> void:
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.38
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color("b2bdc9")
+	env.ambient_light_energy = 0.55
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.75, 0.8, 0.82)
 	env.fog_density = 0.0035
@@ -91,7 +92,7 @@ static func _build_environment(parent: Node3D) -> void:
 	# (the previous near-overhead angle left the ground almost flat/shadowless).
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-38, -50, 0)
-	sun.light_energy = 0.85
+	sun.light_energy = 0.72
 	sun.shadow_enabled = true
 	sun.shadow_blur = 1.2
 	sun.directional_shadow_max_distance = 220.0
@@ -190,11 +191,11 @@ static func _build_road(parent: Node3D, waypoints: Array[Vector3]) -> void:
 		for side in road_sides:
 			var curb_pos: Vector3 = mid + perp * side * (ROAD_WIDTH / 2.0 + 0.2)
 			curb_pos.y = 0.11
-			curb_entries.append({"size": Vector3(0.35, 0.22, length), "position": curb_pos, "y_rot": angle})
+			curb_entries.append({"size": Vector3(0.35, 0.22, maxf(1.0,a.distance_to(b)-ROAD_WIDTH)), "position": curb_pos, "y_rot": angle})
 
 			var sidewalk_pos: Vector3 = mid + perp * side * (ROAD_WIDTH / 2.0 + 1.9)
 			sidewalk_pos.y = 0.05
-			sidewalk_entries.append({"size": Vector3(3.2, 0.1, length), "position": sidewalk_pos, "y_rot": angle})
+			sidewalk_entries.append({"size": Vector3(3.2, 0.1, maxf(1.0,a.distance_to(b)-ROAD_WIDTH)), "position": sidewalk_pos, "y_rot": angle})
 
 	_multimesh_boxes(road_root, "RoadStrips", asphalt, road_entries)
 	_multimesh_boxes(road_root, "LaneDashes", line_mat, dash_entries)
@@ -233,18 +234,13 @@ static func _build_traffic_lights(parent: Node3D, waypoints: Array[Vector3]) -> 
 		light.position = waypoints[idx] + perp * (ROAD_WIDTH / 2.0 + 1.0)
 		parent.add_child(light)
 
-static func _build_traffic_dummies(parent: Node3D, waypoints: Array[Vector3]) -> void:
-	# a couple of decorative vehicles idling/moving on straight stretches
-	var spots := [
-		{"pos": Vector3(120, 0, -220), "dist": 60.0},
-		{"pos": Vector3(460, 0, -70), "dist": 50.0},
-	]
-	for s in spots:
-		var dummy := TrafficDummy.new()
-		dummy.position = s.pos
-		dummy.travel_distance = s.dist
-		dummy.speed = randf_range(4.0, 7.0)
-		parent.add_child(dummy)
+static func _build_traffic_dummies(parent: Node3D, _waypoints: Array[Vector3]) -> void:
+	for index in [2,5,8,11,14]:
+		var car:=TrafficDummy.new()
+		car.name="Oncoming_%d" % index
+		car.start_index=index
+		car.speed=6.0+float(index%3)
+		parent.add_child(car)
 
 # ---------------------------------------------------------------------------
 # District dressing
@@ -256,8 +252,9 @@ static func _build_districts(parent: Node3D, waypoints: Array[Vector3], stop_def
 
 	for def in stop_defs:
 		var wp_index: int = def.waypoint_index
-		var center: Vector3 = waypoints[wp_index]
-		var perp := _perp_at(waypoints, wp_index)
+		var forward := RouteDefinition.stop_forward(wp_index)
+		var perp := Vector3(-forward.z,0,forward.x)
+		var center := RouteDefinition.stop_position(wp_index)-perp*7.0
 		match def.id:
 			0: _build_residential(parent, center, perp, rng)
 			1: _build_market(parent, center, perp, rng)
@@ -503,6 +500,23 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 	var body_mat := CityMaterials.facade(Color.WHITE, true)
 	_multimesh_colored_boxes(parent, "FillerFront", body_mat, front_entries)
 	_multimesh_colored_boxes(parent, "FillerBack", body_mat, back_entries)
+	var roofs: Array=[]
+	var balconies: Array=[]
+	var doors: Array=[]
+	for e in front_entries:
+		roofs.append({"size":Vector3(e.size.x+0.25,0.18,e.size.z+0.25),"position":e.position+Vector3(0,e.size.y/2.0,0),"y_rot":0.0})
+		var front_z: float=e.position.z-e.size.z/2.0
+		doors.append({"size":Vector3(1.2,2.1,0.05),"position":Vector3(e.position.x,1.05,front_z-0.03),"y_rot":0.0})
+		roofs.append({"size":Vector3(2.1,0.14,1.5),"position":Vector3(e.position.x,2.4,front_z-0.7),"y_rot":0.0})
+		var balcony_x: float=roundf((e.position.x+e.size.x*0.23-1.5)/3.0)*3.0+1.5
+		for floor_index in range(1,int(e.size.y/3.0)):
+			var y:=float(floor_index)*3.0+0.3
+			balconies.append({"size":Vector3(2.2,0.14,0.95),"position":Vector3(balcony_x,y,front_z-0.45),"y_rot":0.0})
+			balconies.append({"size":Vector3(2.2,0.82,0.08),"position":Vector3(balcony_x,y+0.45,front_z-0.89),"y_rot":0.0})
+	_multimesh_boxes(parent,"RoofCapsAndCanopies",BusVisual.material(Color("697167")),roofs)
+	_multimesh_boxes(parent,"BalconyPanels",BusVisual.material(Color("899184")),balconies)
+	_multimesh_boxes(parent,"EntranceDoors",BusVisual.material(Color("3d5851")),doors)
+
 
 ## An invisible StaticBody3D collision box - used where a building's visual
 ## comes from a MultiMesh batch (which can't carry per-instance collision)
@@ -535,7 +549,7 @@ static func _multimesh_colored_boxes(parent: Node3D, name: String, material: Mat
 		var e: Dictionary = entries[i]
 		var basis := Basis.from_euler(Vector3(0, e.y_rot, 0)) * Basis.from_scale(e.size)
 		mm.set_instance_transform(i, Transform3D(basis, e.position))
-		mm.set_instance_color(i, e.color)
+		mm.set_instance_color(i, e.color.srgb_to_linear())
 	var inst := MultiMeshInstance3D.new()
 	inst.multimesh = mm
 	inst.material_override = material
@@ -570,7 +584,8 @@ static func _build_trees(parent: Node3D, waypoints: Array[Vector3]) -> void:
 					continue
 				var dist: float = rng.randf_range(7.0, 12.0)
 				var pos: Vector3 = base_pos + perp * side * dist
-				transforms.append(Transform3D(Basis(), pos + Vector3(0, 0.8, 0)))
+				if _clear_of_road(pos, Vector3(1,1,1), waypoints):
+					transforms.append(Transform3D(Basis(), pos + Vector3(0, 0.8, 0)))
 
 	multimesh.instance_count = transforms.size()
 	for i in range(transforms.size()):
@@ -588,20 +603,28 @@ static func _build_trees(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	foliage_mm.transform_format = MultiMesh.TRANSFORM_3D
 	var foliage_mesh := SphereMesh.new()
 	foliage_mesh.radius = 1.6
-	foliage_mesh.height = 3.0
+	foliage_mesh.height = 3.8
+	foliage_mesh.radial_segments = 8
+	foliage_mesh.rings = 4
 	foliage_mm.mesh = foliage_mesh
+	foliage_mm.use_colors = true
 	foliage_mm.instance_count = transforms.size()
 	for i in range(transforms.size()):
 		var base: Transform3D = transforms[i]
-		foliage_mm.set_instance_transform(i, Transform3D(Basis(), base.origin + Vector3(0, 1.8, 0)))
+		foliage_mm.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3(rng.randf_range(0.8,1.3),rng.randf_range(1.1,1.6),rng.randf_range(0.8,1.3))), base.origin + Vector3(0, 2.3, 0)))
+		foliage_mm.set_instance_color(i, Color("546742").lerp(Color("879064"),rng.randf()).srgb_to_linear())
 	var foliage_inst := MultiMeshInstance3D.new()
 	foliage_inst.multimesh = foliage_mm
 	var foliage_mat := StandardMaterial3D.new()
-	foliage_mat.albedo_color = Color(0.22, 0.5, 0.24)
+	foliage_mat.vertex_color_use_as_albedo = true
+	foliage_mat.roughness = 1.0
 	foliage_inst.material_override = foliage_mat
 	parent.add_child(foliage_inst)
 
 static func _clear_of_road(pos: Vector3, size: Vector3, waypoints: Array[Vector3]) -> bool:
+	for def in RouteDefinition.stops():
+		if pos.distance_to(RouteDefinition.stop_position(def.waypoint_index)) < 15.0 + Vector2(size.x,size.z).length()*0.5:
+			return false
 	var radius := Vector2(size.x,size.z).length()*0.5 + ROAD_WIDTH*0.5 + 0.7
 	for i in range(waypoints.size()):
 		var nearest := Geometry3D.get_closest_point_to_segment(pos,waypoints[i],waypoints[(i+1)%waypoints.size()])

@@ -26,6 +26,7 @@ func setup(stop_list: Array[StopArea], vehicle_ref: VehicleController) -> void:
 		s.vehicle_entered.connect(_on_vehicle_entered)
 		s.vehicle_exited.connect(_on_vehicle_exited)
 	current_stop_index = 0
+	_refresh_markers()
 	next_stop_changed.emit(get_next_stop())
 
 func get_next_stop() -> StopArea:
@@ -72,7 +73,42 @@ func advance_to_next_stop() -> void:
 	_handled_current_stop = false
 	if current_stop_index >= stops.size() - 1:
 		_route_finished = true
+		_refresh_markers()
 		route_completed.emit()
 		return
 	current_stop_index += 1
+	_refresh_markers()
 	next_stop_changed.emit(get_next_stop())
+
+func _refresh_markers() -> void:
+	for stop in stops:
+		stop.set_active(not _route_finished and stop == get_next_stop())
+
+## Distance follows the road, so a nearby stop across the block isn't misleading.
+func distance_to_next_stop() -> float:
+	if vehicle == null or stops.is_empty():
+		return 0.0
+	var points := RouteDefinition.waypoints()
+	var best := INF
+	var segment := 0
+	var projected := Vector3.ZERO
+	for i in range(points.size()):
+		var p := Geometry3D.get_closest_point_to_segment(vehicle.global_position,points[i],points[(i+1)%points.size()])
+		var d := vehicle.global_position.distance_squared_to(p)
+		if d < best:
+			best=d
+			segment=i
+			projected=p
+	var stop := get_next_stop()
+	var end_segment := (stop.waypoint_index-1+points.size())%points.size()
+	var end := points[stop.waypoint_index]-RouteDefinition.stop_forward(stop.waypoint_index)*30.0
+	if segment == end_segment and (end-projected).dot(RouteDefinition.stop_forward(stop.waypoint_index)) >= -12.0:
+		return projected.distance_to(end)
+	var distance := projected.distance_to(points[(segment+1)%points.size()])
+	segment=(segment+1)%points.size()
+	for i in range(points.size()):
+		if segment == end_segment:
+			return distance+points[segment].distance_to(end)
+		distance+=points[segment].distance_to(points[(segment+1)%points.size()])
+		segment=(segment+1)%points.size()
+	return distance

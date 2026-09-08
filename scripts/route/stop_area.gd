@@ -24,65 +24,68 @@ func setup(id: int, name_: String, req: bool, wp_index: int) -> void:
 	_build_visual()
 	_build_area()
 
+var _bay_material: StandardMaterial3D
+var _marker: Node3D
+
 func _build_visual() -> void:
-	# ground pad (light color to stand out from asphalt)
-	var pad := MeshInstance3D.new()
-	var pad_mesh := BoxMesh.new()
-	pad_mesh.size = Vector3(6.0, 0.05, 10.0)
-	pad.mesh = pad_mesh
-	var pad_mat := StandardMaterial3D.new()
-	pad_mat.albedo_color = Color(0.85, 0.8, 0.55)
-	pad.material_override = pad_mat
-	pad.position = Vector3(0, 0.03, 0)
-	add_child(pad)
+	var concrete := CityMaterials.surface("paving")
+	var metal := BusVisual.material(Color("3e5654"))
+	var glass := BusVisual.material(Color("647a79"), 0.25)
+	var wood := BusVisual.material(Color("775b43"))
+	BusVisual.box(self, Vector3(-0.9,0.10,0),Vector3(8,0.12,24),CityMaterials.surface("asphalt"))
+	BusVisual.box(self, Vector3(4.4,0.16,0),Vector3(3.3,0.18,23),concrete)
+	_bay_material=BusVisual.material(Color("77786b"))
+	for x in [-2.0,2.0]:
+		BusVisual.box(self,Vector3(x,0.175,0),Vector3(0.12,0.02,10),_bay_material)
+	for z in [-5.0,5.0]:
+		BusVisual.box(self,Vector3(0,0.175,z),Vector3(4,0.02,0.12),_bay_material)
+	# A familiar metal-and-glass shelter, parallel to the bus and outside its bay.
+	BusVisual.box(self,Vector3(4.7,2.8,0),Vector3(2.5,0.18,6.2),metal)
+	BusVisual.box(self,Vector3(5.7,1.55,0),Vector3(0.07,2.3,5.8),glass)
+	for z in [-2.85,0.0,2.85]:
+		BusVisual.box(self,Vector3(5.7,1.55,z),Vector3(0.09,2.4,0.09),metal)
+	for z in [-2.85,2.85]:
+		BusVisual.box(self,Vector3(3.6,1.55,z),Vector3(0.08,2.4,0.08),metal)
+	BusVisual.box(self,Vector3(5.15,0.75,0),Vector3(0.65,0.1,4.5),wood)
+	BusVisual.box(self,Vector3(5.48,1.1,0),Vector3(0.08,0.6,4.5),wood)
+	for z in [-1.8,1.8]:
+		BusVisual.box(self,Vector3(5.1,0.43,z),Vector3(0.08,0.65,0.12),metal)
+	BusVisual.box(self,Vector3(3.5,1.8,-5.5),Vector3(0.09,3.3,0.09),metal)
+	BusVisual.box(self,Vector3(3.5,3.1,-5.5),Vector3(0.07,0.75,0.7),BusVisual.material(Color("285b82")))
+	var number := Label3D.new()
+	number.text="47"
+	number.font_size=64
+	number.pixel_size=0.008
+	number.position=Vector3(3.45,3.1,-5.5)
+	number.rotation.y=-PI/2.0
+	add_child(number)
+	var title := Label3D.new()
+	title.text=stop_name.to_upper()
+	title.font_size=48
+	title.pixel_size=0.006
+	title.position=Vector3(3.4,2.72,0)
+	title.rotation.y=-PI/2.0
+	title.outline_size=2
+	add_child(title)
+	BusVisual.box(self,Vector3(5.6,1.8,-1.9),Vector3(0.035,0.7,0.6),BusVisual.material(Color("e6dcc1")))
+	BusVisual.box(self,Vector3(4.5,0.6,4.0),Vector3(0.6,0.9,0.6),metal)
+	_marker=Node3D.new()
+	_marker.position=Vector3(0,4.7,0)
+	add_child(_marker)
+	var arrow := Label3D.new()
+	arrow.text="↓"
+	arrow.font_size=100
+	arrow.pixel_size=0.018
+	arrow.billboard=BaseMaterial3D.BILLBOARD_ENABLED
+	arrow.modulate=Color("f6cf66")
+	_marker.add_child(arrow)
+	set_active(false)
 
-	# pole
-	var pole := MeshInstance3D.new()
-	var pole_mesh := CylinderMesh.new()
-	pole_mesh.top_radius = 0.08
-	pole_mesh.bottom_radius = 0.1
-	pole_mesh.height = 2.6
-	pole.mesh = pole_mesh
-	pole.position = Vector3(3.2, 1.3, 0)
-	var pole_mat := StandardMaterial3D.new()
-	pole_mat.albedo_color = Color(0.7, 0.7, 0.75)
-	pole.material_override = pole_mat
-	add_child(pole)
-
-	# sign board
-	_sign_mesh = MeshInstance3D.new()
-	var sign_mesh := BoxMesh.new()
-	sign_mesh.size = Vector3(1.4, 0.9, 0.06)
-	_sign_mesh.mesh = sign_mesh
-	_sign_mesh.position = Vector3(3.2, 2.5, 0)
-	var sign_mat := StandardMaterial3D.new()
-	sign_mat.albedo_color = Color(0.15, 0.45, 0.85)
-	sign_mat.emission_enabled = true
-	sign_mat.emission = Color(0.1, 0.3, 0.6)
-	sign_mat.emission_energy_multiplier = 0.5
-	_sign_mesh.material_override = sign_mat
-	add_child(_sign_mesh)
-
-	# small shelter roof for flavor
-	var roof := MeshInstance3D.new()
-	var roof_mesh := BoxMesh.new()
-	roof_mesh.size = Vector3(4.0, 0.15, 2.2)
-	roof.mesh = roof_mesh
-	roof.position = Vector3(4.6, 2.3, 0)
-	var roof_mat := StandardMaterial3D.new()
-	roof_mat.albedo_color = Color(0.4, 0.42, 0.46)
-	roof.material_override = roof_mat
-	add_child(roof)
-	for side in [-0.9, 0.9]:
-		var leg := MeshInstance3D.new()
-		var leg_mesh := CylinderMesh.new()
-		leg_mesh.top_radius = 0.06
-		leg_mesh.bottom_radius = 0.06
-		leg_mesh.height = 2.2
-		leg.mesh = leg_mesh
-		leg.position = Vector3(3.0, 1.1, side)
-		leg.material_override = pole_mat
-		add_child(leg)
+func set_active(active: bool) -> void:
+	if _bay_material:
+		_bay_material.albedo_color=Color("e6bd55") if active else Color("77786b")
+	if _marker:
+		_marker.visible=active
 
 func _build_area() -> void:
 	_area = Area3D.new()

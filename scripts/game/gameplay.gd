@@ -95,10 +95,5 @@ func _on_route_completed() -> void:
 	GameManager.complete_trip()
 
 func _maybe_show_tutorial() -> void:
-	if int(SaveManager.data.get("trips_completed", 0)) > 0:
-		return
-	EventBus.notification.emit("Едьте к отмеченной остановке", 4.0)
-	get_tree().create_timer(4.5).timeout.connect(func():
-		EventBus.notification.emit("Остановитесь и откройте двери (E)", 4.0))
-	get_tree().create_timer(9.0).timeout.connect(func():
-		EventBus.notification.emit("Доставьте пассажиров до следующих остановок", 4.0))
+	if int(SaveManager.data.get("trips_completed", 0)) == 0:
+		EventBus.notification.emit("Ваш первый рейс. Держитесь правой стороны и следуйте мини-карте.",5.0)

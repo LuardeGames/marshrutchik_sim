@@ -68,6 +68,9 @@ func _apply_event(ev: GameEvent) -> void:
 			pass
 
 func _trigger_change_event() -> void:
+	var game := get_tree().current_scene
+	if not game or not game.get("vehicle") or game.vehicle.passengers_aboard == 0:
+		return
 	var fare: int = [40, 45, 50, 60][randi() % 4]
 	var given: int = [500, 1000, 100][randi() % 3]
 	if given <= fare:

@@ -27,7 +27,10 @@ func _process(delta: float) -> void:
 	if target == null or not is_instance_valid(target):
 		return
 	var desired := _desired_transform()
-	global_position = global_position.lerp(desired.origin, clamp(position_smooth * delta, 0.0, 1.0))
+	var focus := target.global_position + Vector3.UP * look_height
+	var candidate := global_position.lerp(desired.origin, clamp(position_smooth * delta, 0.0, 1.0))
+	var hit := get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(focus,candidate,1))
+	global_position = hit.position + hit.normal * 0.55 if not hit.is_empty() else candidate
 	var look_target := target.global_position + Vector3.UP * look_height
 	if _shake_time > 0.0:
 		_shake_time -= delta
@@ -40,6 +43,11 @@ func _process(delta: float) -> void:
 func _desired_transform() -> Transform3D:
 	var back := target.global_transform.basis.z.normalized()
 	var pos := target.global_position + back * follow_distance + Vector3.UP * follow_height
+	var from := target.global_position + Vector3.UP * look_height
+	var query := PhysicsRayQueryParameters3D.create(from, pos, 1)
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if not hit.is_empty():
+		pos = hit.position + hit.normal * 0.55
 	return Transform3D(Basis(), pos)
 
 func shake(strength: float) -> void:

@@ -16,10 +16,10 @@ static func panel_style(bg: Color = COLOR_PANEL, radius: int = 14, border: Color
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
 	sb.set_corner_radius_all(radius)
-	sb.set_border_width_all(2)
+	sb.set_border_width_all(1)
 	sb.border_color = border
 	sb.set_content_margin_all(14)
-	sb.shadow_size = 6
+	sb.shadow_size = 3
 	sb.shadow_color = Color(0, 0, 0, 0.25)
 	return sb
 
@@ -37,10 +37,14 @@ static func style_button(btn: Button, bg: Color = COLOR_ACCENT, text_color: Colo
 	btn.add_theme_stylebox_override("disabled", button_style(bg.darkened(0.4)))
 	btn.add_theme_color_override("font_color", text_color)
 	btn.add_theme_color_override("font_hover_color", text_color)
-	btn.add_theme_color_override("font_disabled_color", Color(text_color, 0.5))
+	btn.add_theme_color_override("font_disabled_color", COLOR_TEXT_DIM)
 	btn.add_theme_font_size_override("font_size", font_size)
 	btn.custom_minimum_size = Vector2(0, 52)
-	btn.focus_mode = Control.FOCUS_NONE
+	btn.focus_mode = Control.FOCUS_ALL
+	var focus:=button_style(Color(0,0,0,0))
+	focus.set_border_width_all(2)
+	focus.border_color=COLOR_TEXT
+	btn.add_theme_stylebox_override("focus",focus)
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 static func make_label(text: String, size: int, color: Color = COLOR_TEXT, bold: bool = false) -> Label:

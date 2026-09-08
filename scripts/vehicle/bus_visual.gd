@@ -37,7 +37,9 @@ static func build(parent: Node3D, d: VehicleDefinition) -> Dictionary:
 	var w := d.width
 	var h := d.height
 	var l := d.length
-	var paint := material(d.body_color, 0.12)
+	var paint := ShaderMaterial.new()
+	paint.shader=preload("res://assets/materials/coachwork.gdshader")
+	paint.set_shader_parameter("paint",d.body_color)
 	var cream := material(d.body_color.lightened(0.12), 0.1)
 	var dark := material(Color("252c2e"))
 	var glass := material(Color("36535f"), 0.28)
@@ -138,6 +140,24 @@ static func build(parent: Node3D, d: VehicleDefinition) -> Dictionary:
 			hub.mesh=hub_mesh
 			hub.material_override=chrome
 			wheel.add_child(hub)
+	# Door outlines, wipers, fuel flap, rear seams and roof vents.
+	for side in [-1.0,1.0]:
+		box(parent,Vector3(side*(w/2.0+0.016),0.90,rear-0.65),Vector3(0.025,0.25,0.3),trim)
+		box(parent,Vector3(side*(w/2.0+0.025),1.12,cabin_front+0.70),Vector3(0.04,0.035,0.2),dark)
+		box(parent,Vector3(side*(w/2.0+0.01),1.0,cabin_front+0.87),Vector3(0.02,0.65,0.015),dark)
+		box(parent,Vector3(side*w*0.34,0.63,rear-0.9),Vector3(0.35,0.25,0.06),rubber)
+		var wiper:=box(parent,Vector3(side*w*0.21,window_y-window_h*0.26,cabin_front+(roof_front-cabin_front)*0.61-0.09),Vector3(w*0.30,0.028,0.03),dark)
+		wiper.rotation.z=0.16
+		box(parent,Vector3(side*w*0.40,1.15,rear+0.045),Vector3(0.18,0.23,0.035),material(Color("9a2b20")))
+		box(parent,Vector3(side*w*0.40,1.31,rear+0.045),Vector3(0.18,0.08,0.035),material(Color("dc963a")))
+	if paz:
+		for z in [-0.7,1.25]:
+			box(parent,Vector3(0,h+0.015,z),Vector3(0.8,0.055,0.75),cream)
+		box(parent,Vector3(0,window_y,cabin_front+(roof_front-cabin_front)*0.61-0.075),Vector3(0.055,window_h,0.03),dark)
+	else:
+		box(parent,Vector3(0,1.12,rear+0.035),Vector3(0.018,0.8,0.015),dark)
+	box(parent,Vector3(0,0.67,front-0.12),Vector3(0.61,0.14,0.025),cream)
+	label(parent,"М 047 РТ",Vector3(0,0.67,front-0.14),PI,0.0014)
 	return {"wheels":wheels,"door":door,"door_origin":door.position}
 
 static func _shell(parent: Node3D,w: float,h: float,front: float,roof_front: float,rear: float,mat: Material) -> void:
@@ -160,7 +180,5 @@ static func _shell(parent: Node3D,w: float,h: float,front: float,roof_front: flo
 	body.name="Coachwork"
 	body.mesh=st.commit()
 	# Authored shell is visible from either winding; windows sit on its exterior.
-	var body_mat: StandardMaterial3D=mat.duplicate()
-	body_mat.cull_mode=BaseMaterial3D.CULL_DISABLED
-	body.material_override=body_mat
+	body.material_override=mat
 	parent.add_child(body)

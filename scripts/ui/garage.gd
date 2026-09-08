@@ -36,8 +36,16 @@ func _build_header() -> void:
 
 	money_label = UITheme.make_label("%d ₽" % SaveManager.get_money(), 24, UITheme.COLOR_TEXT)
 	money_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	money_label.position = Vector2(-220, 22)
+	money_label.position = Vector2(-390, 22)
 	add_child(money_label)
+	var drive:=Button.new()
+	drive.text="На линию →"
+	UITheme.style_button(drive,UITheme.COLOR_GOOD,Color.BLACK,18)
+	drive.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	drive.position=Vector2(-195,12)
+	drive.custom_minimum_size=Vector2(170,48)
+	add_child(drive)
+	drive.pressed.connect(func(): GameManager.start_trip())
 
 func _refresh_money() -> void:
 	money_label.text = "%d ₽" % SaveManager.get_money()
@@ -62,6 +70,7 @@ func _build_vehicles() -> void:
 
 func _refresh_vehicles() -> void:
 	for c in vehicles_box.get_children():
+		vehicles_box.remove_child(c)
 		c.queue_free()
 	var selected := SaveManager.get_selected_vehicle()
 	for def in VehicleCatalog.build():
@@ -81,7 +90,7 @@ func _refresh_vehicles() -> void:
 		var desc := UITheme.make_label(def.description, 13, UITheme.COLOR_TEXT_DIM)
 		desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		v.add_child(desc)
-		v.add_child(UITheme.make_label("Скорость %.0f | Вместимость %d" % [def.base_max_speed * 3.6, def.base_capacity], 13, UITheme.COLOR_TEXT_DIM))
+		v.add_child(UITheme.make_label("%.0f км/ч · %d мест с улучшениями" % [def.base_max_speed * 3.6 * EconomyManager.get_upgrade_multiplier("engine"), def.base_capacity + EconomyManager.get_extra_capacity()], 13, UITheme.COLOR_TEXT_DIM))
 
 		var unlocked := SaveManager.is_vehicle_unlocked(def.id)
 		var btn := Button.new()
@@ -134,6 +143,7 @@ func _build_upgrades() -> void:
 
 func _refresh_upgrades() -> void:
 	for c in upgrades_box.get_children():
+		upgrades_box.remove_child(c)
 		c.queue_free()
 	for u in EconomyManager.upgrades:
 		var row := HBoxContainer.new()
@@ -157,7 +167,7 @@ func _refresh_upgrades() -> void:
 
 		var desc_l := UITheme.make_label(u.description, 13, UITheme.COLOR_TEXT_DIM)
 		desc_l.custom_minimum_size = Vector2(260, 0)
-		desc_l.clip_text = true
+		desc_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		desc_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(desc_l)
 

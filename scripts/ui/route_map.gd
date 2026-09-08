@@ -19,6 +19,11 @@ func _draw() -> void:
 	draw_style_box(UITheme.panel_style(Color(0.06,0.09,0.11,0.90)),Rect2(Vector2.ZERO,size))
 	for i in range(points.size()):
 		draw_line(_map(points[i]),_map(points[(i+1)%points.size()]),Color("7b8988"),3.0,true)
+		var midpoint:=_map(points[i].lerp(points[(i+1)%points.size()],0.5))
+		var direction:=(_map(points[(i+1)%points.size()])-_map(points[i])).normalized()
+		var side:=Vector2(-direction.y,direction.x)
+		draw_line(midpoint-direction*3+side*2,midpoint+direction*2,Color("a3ada4"),1.0,true)
+		draw_line(midpoint-direction*3-side*2,midpoint+direction*2,Color("a3ada4"),1.0,true)
 	if route_manager:
 		for i in range(route_manager.stops.size()):
 			var stop:=route_manager.stops[i]
