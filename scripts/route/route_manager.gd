@@ -14,6 +14,7 @@ var vehicle: VehicleController
 var player_in_zone: StopArea = null
 var _stopped_properly: bool = false
 var _handled_current_stop: bool = false
+var _route_finished: bool = false
 
 const GOOD_STOP_DISTANCE := 3.0
 const FAR_STOP_DISTANCE := 7.0
@@ -25,6 +26,7 @@ func setup(stop_list: Array[StopArea], vehicle_ref: VehicleController) -> void:
 		s.vehicle_entered.connect(_on_vehicle_entered)
 		s.vehicle_exited.connect(_on_vehicle_exited)
 	current_stop_index = 0
+	_refresh_markers()
 	next_stop_changed.emit(get_next_stop())
 
 func get_next_stop() -> StopArea:
@@ -47,7 +49,7 @@ func _on_vehicle_exited(stop: StopArea) -> void:
 			pass # PassengerManager / HUD already nudges player; no hard fail in MVP
 
 func _process(_delta: float) -> void:
-	if vehicle == null or player_in_zone == null:
+	if _route_finished or vehicle == null or player_in_zone == null:
 		return
 	var stop := player_in_zone
 	if stop != get_next_stop():
@@ -65,12 +67,48 @@ func _process(_delta: float) -> void:
 ## Called by PassengerManager once boarding/alighting is finished at the
 ## current stop and doors close (or a short delay elapses), to advance route.
 func advance_to_next_stop() -> void:
-	if stops.is_empty():
+	if _route_finished or stops.is_empty():
 		return
 	var finishing_stop := stops[current_stop_index]
 	_handled_current_stop = false
 	if current_stop_index >= stops.size() - 1:
+		_route_finished = true
+		_refresh_markers()
 		route_completed.emit()
 		return
 	current_stop_index += 1
+	_refresh_markers()
 	next_stop_changed.emit(get_next_stop())
+
+func _refresh_markers() -> void:
+	for stop in stops:
+		stop.set_active(not _route_finished and stop == get_next_stop())
+
+## Distance follows the road, so a nearby stop across the block isn't misleading.
+func distance_to_next_stop() -> float:
+	if vehicle == null or stops.is_empty():
+		return 0.0
+	var points := RouteDefinition.waypoints()
+	var best := INF
+	var segment := 0
+	var projected := Vector3.ZERO
+	for i in range(points.size()):
+		var p := Geometry3D.get_closest_point_to_segment(vehicle.global_position,points[i],points[(i+1)%points.size()])
+		var d := vehicle.global_position.distance_squared_to(p)
+		if d < best:
+			best=d
+			segment=i
+			projected=p
+	var stop := get_next_stop()
+	var end_segment := (stop.waypoint_index-1+points.size())%points.size()
+	var end := points[stop.waypoint_index]-RouteDefinition.stop_forward(stop.waypoint_index)*30.0
+	if segment == end_segment and (end-projected).dot(RouteDefinition.stop_forward(stop.waypoint_index)) >= -12.0:
+		return projected.distance_to(end)
+	var distance := projected.distance_to(points[(segment+1)%points.size()])
+	segment=(segment+1)%points.size()
+	for i in range(points.size()):
+		if segment == end_segment:
+			return distance+points[segment].distance_to(end)
+		distance+=points[segment].distance_to(points[(segment+1)%points.size()])
+		segment=(segment+1)%points.size()
+	return distance

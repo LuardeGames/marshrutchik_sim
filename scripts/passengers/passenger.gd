@@ -13,6 +13,8 @@ var walk_speed: float = 1.6
 
 var _target: Vector3
 var _walking: bool = false
+var _legs: Array[Node3D] = []
+var _walk_phase := 0.0
 
 func setup(a: PassengerArchetype) -> void:
 	archetype = a
@@ -30,7 +32,12 @@ func walk_to(target_pos: Vector3, speed: float = 1.6) -> void:
 
 func _process(delta: float) -> void:
 	if not _walking:
+		for leg in _legs:
+			leg.rotation.x = 0.0
 		return
+	_walk_phase += delta * walk_speed * 5.0
+	for i in range(_legs.size()):
+		_legs[i].rotation.x = sin(_walk_phase + float(i)*PI)*0.35
 	var to_target := _target - global_position
 	to_target.y = 0
 	if to_target.length() < 0.15:
@@ -44,7 +51,7 @@ func _process(delta: float) -> void:
 		step = to_target
 	global_position += step
 	# subtle bob while walking
-	rotation.y = lerp_angle(rotation.y, atan2(to_target.x, to_target.z), 8.0 * delta)
+	rotation.y = lerp_angle(rotation.y, atan2(-to_target.x, -to_target.z), 8.0 * delta)
 
 func is_walking() -> bool:
 	return _walking
@@ -57,25 +64,28 @@ func react_to_jolt() -> void:
 
 func _build_visual() -> void:
 	var color: Color = archetype.color if archetype else Color.WHITE
-
-	var body := MeshInstance3D.new()
-	var body_mesh := CapsuleMesh.new()
-	body_mesh.radius = 0.28
-	body_mesh.height = 1.15
-	body.mesh = body_mesh
-	body.position = Vector3(0, 0.75, 0)
-	var body_mat := StandardMaterial3D.new()
-	body_mat.albedo_color = color
-	body.material_override = body_mat
-	add_child(body)
-
+	var coat := BusVisual.material(color)
+	var trousers := BusVisual.material(Color("343c45"))
+	var skin := BusVisual.material(Color("d8b28e"))
+	BusVisual.box(self,Vector3(0,1.05,0),Vector3(0.47,0.64,0.29),coat)
+	for side in [-1.0,1.0]:
+		var leg := Node3D.new()
+		leg.position = Vector3(side*0.13,0.74,0)
+		add_child(leg)
+		_legs.append(leg)
+		BusVisual.box(leg,Vector3(0,-0.33,0),Vector3(0.17,0.64,0.19),trousers)
+		BusVisual.box(leg,Vector3(0,-0.68,-0.07),Vector3(0.19,0.12,0.33),BusVisual.material(Color("23262a")))
+		BusVisual.box(self,Vector3(side*0.31,0.96,0),Vector3(0.14,0.59,0.19),coat)
+		BusVisual.box(self,Vector3(side*0.31,0.65,0),Vector3(0.12,0.13,0.14),skin)
 	var head := MeshInstance3D.new()
-	var head_mesh := SphereMesh.new()
-	head_mesh.radius = 0.2
-	head_mesh.height = 0.4
-	head.mesh = head_mesh
-	head.position = Vector3(0, 1.5, 0)
-	var head_mat := StandardMaterial3D.new()
-	head_mat.albedo_color = Color(0.9, 0.75, 0.6)
-	head.material_override = head_mat
+	var mesh := SphereMesh.new()
+	mesh.radius=0.19
+	mesh.height=0.40
+	mesh.radial_segments=12
+	mesh.rings=6
+	head.mesh=mesh
+	head.position=Vector3(0,1.55,0)
+	head.material_override=skin
 	add_child(head)
+	BusVisual.box(self,Vector3(0,1.70,0.025),Vector3(0.35,0.12,0.30),BusVisual.material(Color("67584c")))
+	BusVisual.box(self,Vector3(0.36,0.45,0),Vector3(0.28,0.35,0.20),BusVisual.material(Color("8a7c59")))

@@ -12,6 +12,10 @@ var _engine_current_freq: float = 60.0
 var _engine_enabled: bool = false
 
 var _sfx_bus_volume: float = 1.0
+var _paz := false
+var _road_ratio := 0.0
+var _music: AudioStreamPlayer
+var _engine_noise := 0.0
 
 func _ready() -> void:
 	_engine_player = AudioStreamPlayer.new()
@@ -25,6 +29,13 @@ func _ready() -> void:
 	_engine_playback = _engine_player.get_stream_playback()
 	set_process(true)
 	_apply_saved_settings()
+	_music=AudioStreamPlayer.new()
+	var track: AudioStreamWAV=load("res://assets/audio/radio_evening.wav").duplicate()
+	track.loop_mode=AudioStreamWAV.LOOP_FORWARD
+	track.loop_end=track.data.size()/2
+	_music.stream=track
+	add_child(_music)
+	_music.play()
 
 func _apply_saved_settings() -> void:
 	if SaveManager == null:
@@ -37,11 +48,19 @@ func _process(_delta: float) -> void:
 	_engine_current_freq = lerp(_engine_current_freq, _engine_target_freq, 0.05)
 	var frames_available := _engine_playback.get_frames_available()
 	var muted := SaveManager != null and SaveManager.is_muted()
-	var vol := 0.0 if muted or not _engine_enabled else 0.18 * SaveManager.get_sound_setting("master")
+	var master := SaveManager.get_sound_setting("master")
+	var sfx := SaveManager.get_sound_setting("sfx")
+	if _music:
+		var music_volume := 0.0 if muted else master*SaveManager.get_sound_setting("music")
+		_music.volume_db=linear_to_db(maxf(music_volume*0.6,0.00001))
+	var vol := 0.0 if muted or not _engine_enabled else 0.24 * master * sfx
 	for i in range(frames_available):
 		var sample := sin(_engine_phase * TAU) * vol
 		# add a bit of low harmonic buzz for an "engine" feel
-		sample += sin(_engine_phase * TAU * 2.0) * vol * 0.3
+		sample += sin(_engine_phase * TAU * 2.0) * vol * 0.38
+		sample += sin(_engine_phase * TAU * 4.0) * vol * 0.12
+		_engine_noise=lerpf(_engine_noise,randf_range(-1,1),0.10)
+		sample += _engine_noise*vol*(0.18+_road_ratio*0.8)
 		_engine_phase = fmod(_engine_phase + _engine_current_freq / MIX_RATE, 1.0)
 		_engine_playback.push_frame(Vector2(sample, sample))
 
@@ -50,7 +69,10 @@ func set_engine_running(running: bool) -> void:
 
 func set_engine_rpm(speed_ratio: float) -> void:
 	# speed_ratio: 0..1
-	_engine_target_freq = 55.0 + clamp(speed_ratio, 0.0, 1.0) * 140.0
+	_road_ratio=clampf(speed_ratio,0.0,1.0)
+	var gear := mini(3,int(_road_ratio*4.0))
+	var rev := _road_ratio*4.0-float(gear)
+	_engine_target_freq = (43.0 if _paz else 58.0) + rev*42.0 + gear*5.0
 
 func _spawn_tone_player() -> AudioStreamPlayer:
 	var p := AudioStreamPlayer.new()
@@ -124,3 +146,10 @@ func play_trip_complete() -> void:
 	var notes := [523.0, 659.0, 784.0, 1046.0]
 	for i in range(notes.size()):
 		get_tree().create_timer(i * 0.14).timeout.connect(func(): _play_tone(notes[i], 0.18, 0.32))
+
+func set_vehicle_type(paz: bool) -> void:
+	_paz=paz
+
+func play_horn(paz: bool = false) -> void:
+	_play_tone(185.0 if paz else 330.0,0.4,0.18,"square")
+	_play_tone(233.0 if paz else 415.0,0.4,0.12)

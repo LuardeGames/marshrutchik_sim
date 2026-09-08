@@ -46,3 +46,12 @@ static func total_length() -> float:
 		var b: Vector3 = pts[(i + 1) % pts.size()]
 		total += a.distance_to(b)
 	return total
+
+## Stops sit 30 m before each corner on the incoming straight, in a right-side bay.
+static func stop_forward(index: int) -> Vector3:
+	var pts := waypoints()
+	return (pts[index] - pts[(index - 1 + pts.size()) % pts.size()]).normalized()
+
+static func stop_position(index: int) -> Vector3:
+	var dir := stop_forward(index)
+	return waypoints()[index] - dir * 30.0 + Vector3(-dir.z, 0, dir.x) * 7.0

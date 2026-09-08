@@ -9,6 +9,7 @@ const MENU_SCENE := "res://scenes/main_menu/main_menu.tscn"
 const GARAGE_SCENE := "res://scenes/garage/garage.tscn"
 
 var state: State = State.MENU
+var _last_summary: Dictionary = {}
 
 # --- running trip stats (reset at trip start) ---
 var comfort: float = 100.0
@@ -22,6 +23,9 @@ func _ready() -> void:
 	PlatformService.init()
 
 func start_trip() -> void:
+	get_tree().paused = false
+	InputState.reset_touch()
+	_last_summary = {}
 	comfort = 100.0
 	trip_time = 0.0
 	passengers_delivered = 0
@@ -33,12 +37,17 @@ func start_trip() -> void:
 	get_tree().change_scene_to_file(GAMEPLAY_SCENE)
 
 func go_to_menu() -> void:
+	get_tree().paused = false
+	InputState.reset_touch()
 	state = State.MENU
 	trip_running = false
 	get_tree().change_scene_to_file(MENU_SCENE)
 
 func go_to_garage() -> void:
+	get_tree().paused = false
+	InputState.reset_touch()
 	state = State.GARAGE
+	trip_running = false
 	get_tree().change_scene_to_file(GARAGE_SCENE)
 
 func _process(delta: float) -> void:
@@ -70,6 +79,8 @@ func format_time(t: float) -> String:
 ## Called by RouteManager once the final stop is reached. Builds the result
 ## summary dictionary and switches to results state (HUD shows ResultScreen).
 func complete_trip() -> Dictionary:
+	if state == State.RESULTS and not _last_summary.is_empty():
+		return _last_summary.duplicate(true)
 	trip_running = false
 	var comfort_bonus := int(round((comfort / 100.0) * 60))
 	if comfort_bonus > 0:
@@ -85,16 +96,24 @@ func complete_trip() -> Dictionary:
 	var rating := _compute_rating(total)
 	SaveManager.register_trip_result(total, rating)
 
+	var mastered_before := bool(SaveManager.data.get("route_mastered", false))
+	var mastered := rating == 3 and SaveManager.get_selected_vehicle() == "modern_microbus"
+	if mastered:
+		SaveManager.data["route_mastered"] = true
+		SaveManager.save_game()
 	var summary := {
+		"mastered_now": mastered and not mastered_before,
 		"passengers": passengers_delivered,
 		"fares": EconomyManager.trip_fares,
 		"comfort_bonus": EconomyManager.trip_comfort_bonus,
+		"stop_bonus": EconomyManager.trip_stop_bonus,
 		"penalties": EconomyManager.trip_penalties,
 		"time": trip_time,
 		"total": total,
 		"rating": rating,
 		"comfort": comfort,
 	}
+	_last_summary = summary.duplicate(true)
 	state = State.RESULTS
 	EventBus.trip_completed.emit(summary)
 	AudioManager.play_trip_complete()

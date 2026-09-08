@@ -20,7 +20,7 @@ func stop() -> void:
 	active = false
 
 func _process(delta: float) -> void:
-	if not active:
+	if not active or not GameManager.trip_running:
 		return
 	_flavor_timer -= delta
 	if _flavor_timer <= 0.0:
@@ -68,6 +68,9 @@ func _apply_event(ev: GameEvent) -> void:
 			pass
 
 func _trigger_change_event() -> void:
+	var game := get_tree().current_scene
+	if not game or not game.get("vehicle") or game.vehicle.passengers_aboard == 0:
+		return
 	var fare: int = [40, 45, 50, 60][randi() % 4]
 	var given: int = [500, 1000, 100][randi() % 3]
 	if given <= fare:
