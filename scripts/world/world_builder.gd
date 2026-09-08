@@ -58,20 +58,18 @@ static func _build_environment(parent: Node3D) -> void:
 	var env_node := WorldEnvironment.new()
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
-	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.35, 0.55, 0.85)
-	sky_mat.sky_horizon_color = Color(0.75, 0.82, 0.85)
-	sky_mat.ground_bottom_color = Color(0.3, 0.3, 0.3)
-	sky_mat.ground_horizon_color = Color(0.75, 0.82, 0.85)
+	var sky_mat := ShaderMaterial.new()
+	sky_mat.shader = preload("res://assets/materials/overcast_sky.gdshader")
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("b2bdc9")
-	env.ambient_light_energy = 0.55
+	env.ambient_light_color = Color("bac0c5")
+	env.ambient_light_energy = 0.68
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.75, 0.8, 0.82)
-	env.fog_density = 0.00025
+	env.fog_light_color = Color("929da3")
+	env.fog_density = 0.00065
+	env.fog_sky_affect = 0.12
 	env.fog_aerial_perspective = 0.0
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.tonemap_exposure = 0.90
@@ -89,22 +87,21 @@ static func _build_environment(parent: Node3D) -> void:
 	env_node.environment = env
 	parent.add_child(env_node)
 
-	# Lower, warmer sun angle for long shadows that actually read as shadows
-	# (the previous near-overhead angle left the ground almost flat/shadowless).
+	# Broad cloud cover scatters sunlight; no hard direct-sun shadows.
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-38, -50, 0)
-	sun.light_energy = 0.58
-	sun.shadow_enabled = true
+	sun.light_energy = 0.20
+	sun.shadow_enabled = false
 	sun.shadow_blur = 1.2
 	sun.directional_shadow_max_distance = 220.0
-	sun.light_color = Color(1.0, 0.95, 0.85)
+	sun.light_color = Color("d4d9df")
 	parent.add_child(sun)
 
 	# Cool, dim fill light from the opposite side so shadow-side faces of
 	# buildings aren't pure black - cheap and very cheap on a single mesh pass.
 	var fill := DirectionalLight3D.new()
 	fill.rotation_degrees = Vector3(-25, 130, 0)
-	fill.light_energy = 0.10
+	fill.light_energy = 0.06
 	fill.light_color = Color(0.7, 0.8, 1.0)
 	fill.shadow_enabled = false
 	parent.add_child(fill)
@@ -226,22 +223,34 @@ static func _multimesh_boxes(parent: Node3D, name: String, material: Material, e
 	parent.add_child(inst)
 
 static func _build_traffic_lights(parent: Node3D, waypoints: Array[Vector3]) -> void:
-	var corner_indices := [2, 7, 10]
-	for idx in corner_indices:
-		if idx >= waypoints.size():
-			continue
-		var light := TrafficLightProp.new()
-		var perp := _perp_at(waypoints, idx)
-		light.position = waypoints[idx] + perp * (ROAD_WIDTH / 2.0 + 1.0)
-		parent.add_child(light)
+	for idx in [2,7,10]:
+		for neighbor in [(idx-1+waypoints.size())%waypoints.size(),(idx+1)%waypoints.size()]:
+			var dir: Vector3 = (waypoints[idx]-waypoints[neighbor]).normalized()
+			var right := Vector3(-dir.z,0,dir.x)
+			var light := TrafficLightProp.new()
+			light.approach = dir
+			light.stop_point = waypoints[idx]-dir*17.0+right*2.5
+			light.phase_offset = float(idx)*1.3
+			light.position = waypoints[idx]-dir*10.0+right*6.6
+			parent.add_child(light)
+			light.look_at(light.position+dir)
+			_box(parent,light.stop_point+Vector3(0,0.14,0),Vector3(4.4,0.025,0.35),Color("d4d3ca"),false,atan2(dir.x,dir.z))
+	RoadSigns.build(parent,waypoints)
 
-static func _build_traffic_dummies(parent: Node3D, _waypoints: Array[Vector3]) -> void:
-	for index in [2,5,8,11,14]:
-		var car:=TrafficDummy.new()
-		car.name="Oncoming_%d" % index
-		car.start_index=index
-		car.speed=6.0+float(index%3)
-		parent.add_child(car)
+static func _build_traffic_dummies(parent: Node3D, waypoints: Array[Vector3]) -> void:
+	var outer: Array[Vector3] = [Vector3(-140,0,-600),Vector3(760,0,-600),Vector3(760,0,280),Vector3(-140,0,280)]
+	for circuit in [waypoints,outer]:
+		var count := 12 if circuit==waypoints else 8
+		for reverse in [false,true]:
+			for index in range(count):
+				var car := TrafficDummy.new()
+				car.name = "Oncoming_%s_%s_%d" % ["Route" if circuit==waypoints else "Outer",reverse,index]
+				car.road_path.assign(circuit)
+				car.reverse_direction = reverse
+				car.start_index = index
+				car.spawn_fraction = (float(index)+0.35)/float(count)
+				car.speed = 7.5+float(index%4)*0.7
+				parent.add_child(car)
 
 # ---------------------------------------------------------------------------
 # District dressing
@@ -582,6 +591,10 @@ static func _build_trees(parent: Node3D, waypoints: Array[Vector3]) -> void:
 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 42
+	var signs: Array[Vector3] = []
+	for child in parent.get_children():
+		if child is TrafficLightProp or child.name.begins_with("Sign_"):
+			signs.append(child.position)
 	var transforms: Array[Transform3D] = []
 	var n := waypoints.size()
 	for i in range(n):
@@ -599,7 +612,12 @@ static func _build_trees(parent: Node3D, waypoints: Array[Vector3]) -> void:
 					continue
 				var dist: float = rng.randf_range(7.0, 12.0)
 				var pos: Vector3 = base_pos + perp * side * dist
-				if _clear_of_road(pos, Vector3(1,1,1), waypoints):
+				var hides_sign := false
+				for sign_pos in signs:
+					if pos.distance_to(sign_pos)<4.0:
+						hides_sign=true
+						break
+				if not hides_sign and _clear_of_road(pos, Vector3(1,1,1), waypoints):
 					transforms.append(Transform3D(Basis(), pos + Vector3(0, 0.8, 0)))
 
 	multimesh.instance_count = transforms.size()

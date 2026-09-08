@@ -20,10 +20,11 @@ static func build(parent: Node3D, waypoints: Array[Vector3]) -> void:
 			var pos := a+dir*float(k)*40.0+side*7.0
 			poles.append({"size":Vector3(0.15,7.0,0.15),"position":pos+Vector3(0,3.5,0),"y_rot":0.0})
 			arms.append({"size":Vector3(2.1,0.10,0.10),"position":pos-side+Vector3(0,6.9,0),"y_rot":angle})
-		# A zebra crossing before the intersection; outside the stop bay.
-		for stripe in range(7):
-			var crossing_pos:=b-dir*12.0+side*(float(stripe)-3.0)*1.1+Vector3(0,0.145,0)
-			crossings.append({"size":Vector3(0.5,0.015,3.2),"position":crossing_pos,"y_rot":angle})
+		# Both approaches have a crossing, matching the roadside signs.
+		for distance in [12.0,a.distance_to(b)-12.0]:
+			for stripe in range(7):
+				var crossing_pos: Vector3=a+dir*distance+side*(float(stripe)-3.0)*1.1+Vector3(0,0.145,0)
+				crossings.append({"size":Vector3(0.5,0.015,3.2),"position":crossing_pos,"y_rot":angle})
 		# A patch and manhole on each straight, above the road surface.
 		var patch := BusVisual.box(root,a.lerp(b,0.6)+Vector3(0,0.132,0)+side*1.8,Vector3(2.5,0.01,4),BusVisual.material(Color("373d3f")))
 		patch.rotation.y=angle
