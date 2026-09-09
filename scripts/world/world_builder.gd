@@ -239,9 +239,12 @@ static func _build_traffic_lights(parent: Node3D, waypoints: Array[Vector3]) -> 
 
 static func _build_traffic_dummies(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	var outer: Array[Vector3] = [Vector3(-140,0,-600),Vector3(760,0,-600),Vector3(760,0,280),Vector3(-140,0,280)]
-	for circuit in [waypoints,outer]:
+	var civic_loop: Array[Vector3] = [Vector3(-90,0,-80),Vector3(250,0,-80),Vector3(250,0,110),Vector3(-90,0,110)]
+	var industrial_loop: Array[Vector3] = [Vector3(380,0,-430),Vector3(680,0,-430),Vector3(680,0,-170),Vector3(520,0,-110),Vector3(380,0,-190)]
+	for circuit in [waypoints, outer, civic_loop, industrial_loop]:
 		var is_route: bool = circuit == waypoints
-		var count: int = 20 if is_route else 12
+		var is_outer: bool = circuit == outer
+		var count: int = 20 if is_route else (12 if is_outer else 5)
 		for reverse in [false,true]:
 			for index in range(count):
 				var car := TrafficDummy.new()
@@ -464,6 +467,18 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 	_build_road(parent, ring)
 	for i in range(4):
 		streets.append([ring[i],ring[(i+1)%4]])
+	# Secondary city grid: the route is only one part of the road network.
+	# These loops intentionally use different scales so the map reads as
+	# districts connected by streets rather than a single racing circuit.
+	var civic_loop: Array[Vector3] = [Vector3(-90,0,-80),Vector3(250,0,-80),Vector3(250,0,110),Vector3(-90,0,110)]
+	var industrial_loop: Array[Vector3] = [Vector3(380,0,-430),Vector3(680,0,-430),Vector3(680,0,-170),Vector3(520,0,-110),Vector3(380,0,-190)]
+	var west_loop: Array[Vector3] = [Vector3(-100,0,-470),Vector3(90,0,-470),Vector3(90,0,-270),Vector3(-40,0,-200),Vector3(-170,0,-300)]
+	_add_network_loop(parent, streets, civic_loop)
+	_add_network_loop(parent, streets, industrial_loop)
+	_add_network_loop(parent, streets, west_loop)
+	_build_roundabout(parent, streets, Vector3(285,0,-95), 48.0)
+	_build_narrow_street(parent, streets, Vector3(270,0,110), Vector3(390,0,240))
+	_build_bridge_feature(parent, streets)
 	var links: Array = [[Vector3(-140,0,-140),Vector3(0,0,-140)], [Vector3(300,0,-600),Vector3(300,0,-460)], [Vector3(760,0,-140),Vector3(620,0,-140)], [Vector3(300,0,280),Vector3(300,0,140)]]
 	var link_surfaces: Array = []
 	for link in links:
@@ -524,6 +539,48 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 	_multimesh_boxes(parent,"RoofCapsAndCanopies",BusVisual.material(Color("697167")),roofs)
 	_multimesh_boxes(parent,"BalconyPanels",BusVisual.material(Color("899184")),balconies)
 	_multimesh_boxes(parent,"EntranceDoors",BusVisual.material(Color("3d5851")),doors)
+
+static func _add_network_loop(parent: Node3D, streets: Array, points: Array[Vector3]) -> void:
+	_build_road(parent, points)
+	for i in range(points.size()):
+		streets.append([points[i], points[(i + 1) % points.size()]])
+
+static func _build_roundabout(parent: Node3D, streets: Array, center: Vector3, radius: float) -> void:
+	var points: Array[Vector3] = []
+	for i in range(8):
+		var angle: float = TAU * float(i) / 8.0
+		points.append(center + Vector3(cos(angle), 0, sin(angle)) * radius)
+	_add_network_loop(parent, streets, points)
+	_box(parent, center + Vector3(0, 0.12, 0), Vector3(radius * 0.92, 0.22, radius * 0.92), Color("68775b"), true)
+	for i in range(8):
+		var angle: float = TAU * float(i) / 8.0
+		var tree_pos: Vector3 = center + Vector3(cos(angle), 0.8, sin(angle)) * (radius * 0.32)
+		_box(parent, tree_pos, Vector3(1.0, 1.6, 1.0), Color("54704d"), true)
+
+static func _build_narrow_street(parent: Node3D, streets: Array, start: Vector3, finish: Vector3) -> void:
+	var dir: Vector3 = (finish - start).normalized()
+	var middle: Vector3 = (start + finish) * 0.5
+	_box(parent, middle + Vector3(0, 0.05, 0), Vector3(6.2, 0.12, start.distance_to(finish) + 8.0), Color("343b3b"), false, atan2(dir.x, dir.z))
+	streets.append([start, finish])
+	# Close the lane with a pair of close walls, making this a deliberate
+	# low-speed shortcut rather than another open highway.
+	var side: Vector3 = Vector3(-dir.z, 0, dir.x)
+	_box(parent, start.lerp(finish, 0.5) + side * 4.8 + Vector3(0, 1.0, 0), Vector3(0.35, 2.0, finish.distance_to(start)), Color("77736b"), true, atan2(dir.x, dir.z))
+	_box(parent, start.lerp(finish, 0.5) - side * 4.8 + Vector3(0, 1.0, 0), Vector3(0.35, 2.0, finish.distance_to(start)), Color("77736b"), true, atan2(dir.x, dir.z))
+
+static func _build_bridge_feature(parent: Node3D, streets: Array) -> void:
+	var start := Vector3(250, 0, -80)
+	var finish := Vector3(380, 0, -80)
+	var dir: Vector3 = (finish - start).normalized()
+	var side: Vector3 = Vector3(-dir.z, 0, dir.x)
+	streets.append([start, finish])
+	_box(parent, (start + finish) * 0.5 + Vector3(0, 0.16, 0), Vector3(12.8, 0.28, start.distance_to(finish)), Color("4b5353"), false, atan2(dir.x, dir.z))
+	_box(parent, (start + finish) * 0.5 + side * 6.3 + Vector3(0, 0.85, 0), Vector3(0.28, 1.4, start.distance_to(finish)), Color("77756d"), true, atan2(dir.x, dir.z))
+	_box(parent, (start + finish) * 0.5 - side * 6.3 + Vector3(0, 0.85, 0), Vector3(0.28, 1.4, start.distance_to(finish)), Color("77756d"), true, atan2(dir.x, dir.z))
+	for x in [0.18, 0.50, 0.82]:
+		var post_pos: Vector3 = start.lerp(finish, x)
+		_box(parent, post_pos + side * 6.3 + Vector3(0, 0.9, 0), Vector3(0.34, 1.8, 0.34), Color("8e887a"), true)
+		_box(parent, post_pos - side * 6.3 + Vector3(0, 0.9, 0), Vector3(0.34, 1.8, 0.34), Color("8e887a"), true)
 
 
 static func _collect_occupied(node: Node, occupied: Array[Rect2]) -> void:
