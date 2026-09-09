@@ -77,6 +77,7 @@ static func build(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	_build_sidewalk_props(root, waypoints)
 	_build_parks_and_courtyards(root, waypoints)
 	_build_chain_stores(root)
+	_build_neighborhood_life(root, waypoints)
 
 static func _build_ambient_life(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	var rng := RandomNumberGenerator.new()
@@ -242,6 +243,44 @@ static func _chain_store(root: Node3D, pos: Vector3, store_name: String, color: 
 	WorldBuilder._box(store, Vector3(0, 3.65, -3.65), Vector3(9.4, 0.8, 0.18), BusVisual.material(color), false)
 	WorldBuilder._box(store, Vector3(0, 1.7, -3.63), Vector3(7.2, 1.7, 0.08), BusVisual.material(Color("42606a")), false)
 	_sign(store, store_name, Vector3(0, 3.65, -3.78), 0.005)
+
+static func _build_neighborhood_life(root: Node3D, waypoints: Array[Vector3]) -> void:
+	var colors: Array[Color] = [Color("536a72"), Color("8b5148"), Color("b18d53"), Color("65745b")]
+	var courtyard_index := 0
+	for i in range(waypoints.size()):
+		if i % 2 == 0:
+			continue
+		var a: Vector3 = waypoints[i]
+		var b: Vector3 = waypoints[(i + 1) % waypoints.size()]
+		var dir: Vector3 = (b - a).normalized()
+		var side: Vector3 = Vector3(-dir.z, 0, dir.x)
+		var center: Vector3 = a.lerp(b, 0.52) + side * (27.0 if i % 4 == 1 else -27.0)
+		var yard := Node3D.new()
+		yard.name = "Courtyard_%d" % courtyard_index
+		yard.position = center
+		yard.rotation.y = atan2(dir.x, dir.z)
+		root.add_child(yard)
+		WorldBuilder._box(yard, Vector3(0, 0.035, 0), Vector3(24.0, 0.07, 20.0), BusVisual.material(Color("536442")), false)
+		WorldBuilder._box(yard, Vector3(0, 0.075, 0), Vector3(1.8, 0.035, 19.0), BusVisual.material(Color("a79b79")), false)
+		for x in [-8.0, -2.7, 2.7, 8.0]:
+			WorldBuilder._box(yard, Vector3(x, 1.35, -7.2), Vector3(4.5, 2.7, 4.0), BusVisual.material(Color("77706a")))
+			WorldBuilder._box(yard, Vector3(x, 2.80, -7.2), Vector3(4.8, 0.25, 4.3), BusVisual.material(Color("4d5553")), false)
+		for car_index in range(3):
+			_parked_car(yard, Vector3(-8.0 + float(car_index) * 5.2, 0, 5.4), dir, colors[(i + car_index) % colors.size()])
+		# A small Soviet-style playground gives empty courtyards a readable use.
+		WorldBuilder._box(yard, Vector3(5.2, 0.20, -0.8), Vector3(4.5, 0.4, 3.8), BusVisual.material(Color("b99b62")), false)
+		WorldBuilder._box(yard, Vector3(3.4, 1.15, -1.8), Vector3(0.14, 2.3, 0.14), BusVisual.material(Color("b24c3e")), false)
+		WorldBuilder._box(yard, Vector3(5.2, 1.15, -1.8), Vector3(0.14, 2.3, 0.14), BusVisual.material(Color("b24c3e")), false)
+		WorldBuilder._box(yard, Vector3(4.3, 2.05, -1.8), Vector3(1.2, 0.10, 0.10), BusVisual.material(Color("d0b25c")), false)
+		WorldBuilder._box(yard, Vector3(-7.0, 1.0, -0.8), Vector3(0.10, 2.0, 0.10), BusVisual.material(Color("596461")), false)
+		WorldBuilder._box(yard, Vector3(-3.0, 1.0, -0.8), Vector3(0.10, 2.0, 0.10), BusVisual.material(Color("596461")), false)
+		WorldBuilder._box(yard, Vector3(-5.0, 1.6, -0.8), Vector3(4.0, 0.08, 0.08), BusVisual.material(Color("596461")), false)
+		WorldBuilder._box(yard, Vector3(-8.0, 0.45, 0.5), Vector3(0.75, 0.9, 0.75), BusVisual.material(Color("596461")))
+		WorldBuilder._box(yard, Vector3(-6.8, 0.45, 0.5), Vector3(0.75, 0.9, 0.75), BusVisual.material(Color("596461")))
+		for x in [-9.0, 9.0]:
+			_shrub(yard, Vector3(x, 1.3, 6.8), Color("4f704d"), 1.25)
+			WorldBuilder._invisible_collider(yard, Vector3(x, 1.1, 6.8), Vector3(1.0, 2.2, 1.0))
+		courtyard_index += 1
 
 static func _sign(parent: Node3D,text: String,pos: Vector3,pixel: float) -> void:
 	var label:=Label3D.new()

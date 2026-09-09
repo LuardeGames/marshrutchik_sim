@@ -450,6 +450,10 @@ static func _build_city_variety(parent: Node3D) -> void:
 	_build_school(parent, Vector3(-150, 0, 125), Vector3(30, 7, 18))
 	_build_fire_station(parent, Vector3(710, 0, 120), Vector3(24, 6, 16))
 	_build_private_street(parent, Vector3(-235, 0, 80))
+	_build_post_office(parent, Vector3(5, 0, 245), Vector3(22, 7, 14))
+	_build_cinema(parent, Vector3(225, 0, 245), Vector3(26, 8, 18))
+	_build_market_hall(parent, Vector3(-185, 0, -175), Vector3(26, 8, 18))
+	_build_warehouse(parent, Vector3(760, 0, -430), Vector3(30, 8, 22))
 
 static func _build_brick_house(parent: Node3D, pos: Vector3, size: Vector3, y_rot: float) -> void:
 	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("a86e55"), true, y_rot)
@@ -483,6 +487,33 @@ static func _build_private_street(parent: Node3D, origin: Vector3) -> void:
 		_box(parent, pos + Vector3(0, 2.2, 0), Vector3(18.0, 4.4, 10.0), Color("b58d68"))
 		_box(parent, pos + Vector3(0, 4.6, 0), Vector3(19.0, 0.35, 11.0), Color("5c4f43"), false)
 		_box(parent, pos + Vector3(0, 0.45, -6.4), Vector3(20.0, 0.9, 0.18), Color("7c684c"), true)
+
+static func _build_post_office(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("c28362"))
+	_add_window_band(building, size)
+	_box(parent, pos + Vector3(0, size.y + 0.2, 0), Vector3(size.x + 0.7, 0.35, size.z + 0.7), Color("6a7169"), false)
+	BusVisual.label(parent, "ПОЧТА", pos + Vector3(0, 4.3, -size.z * 0.55), PI, 0.005)
+
+static func _build_cinema(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("6b7182"))
+	_add_window_band(building, size)
+	_box(parent, pos + Vector3(0, 4.6, -size.z * 0.55), Vector3(size.x * 0.75, 2.2, 0.14), Color("384e60"), false)
+	BusVisual.label(parent, "КИНОТЕАТР «ЗАРЯ»", pos + Vector3(0, 4.7, -size.z * 0.65), PI, 0.003)
+
+static func _build_market_hall(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("9d7655"))
+	_add_window_band(building, size)
+	_box(parent, pos + Vector3(0, size.y + 0.45, 0), Vector3(size.x + 1.2, 0.8, size.z + 1.2), Color("4d5b59"), false)
+	for x in [-8.0, 0.0, 8.0]:
+		_box(parent, pos + Vector3(x, 1.4, -size.z * 0.58), Vector3(5.5, 2.0, 0.12), Color("b85a42"), false)
+	BusVisual.label(parent, "ГОРОДСКОЙ РЫНОК", pos + Vector3(0, 5.2, -size.z * 0.62), PI, 0.003)
+
+static func _build_warehouse(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("777b73"))
+	_add_window_band(building, size)
+	for x in [-9.0, 0.0, 9.0]:
+		_box(parent, pos + Vector3(x, 1.7, -size.z * 0.55), Vector3(6.0, 3.0, 0.14), Color("354a50"), false)
+	BusVisual.label(parent, "СКЛАД / ЛОГИСТИКА", pos + Vector3(0, 5.4, -size.z * 0.60), PI, 0.003)
 
 static func _add_window_band(building: Node3D, size: Vector3) -> void:
 	for child in building.get_children():
