@@ -34,6 +34,23 @@ func _run() -> void:
 	_check("route has 6 stops", RouteDefinition.stops().size() == 6)
 	_check("route waypoints non-empty", RouteDefinition.waypoints().size() > 0)
 	_check("route total length is reasonable (500-6000m)", RouteDefinition.total_length() > 500.0 and RouteDefinition.total_length() < 6000.0)
+	_check("three route definitions are available", RouteDefinition.route_ids().size() == 3)
+	for route_id in RouteDefinition.route_ids():
+		var route_points := RouteDefinition.waypoints(route_id)
+		var route_stops := RouteDefinition.stops(route_id)
+		_check("route %s has 6 stops" % route_id, route_stops.size() == 6)
+		_check("route %s has a usable road loop" % route_id, route_points.size() >= 12 and RouteDefinition.total_length(route_id) > 500.0)
+	var route_save := SaveManager.DEFAULT_DATA.duplicate(true)
+	SaveManager.data = route_save
+	_check("route 47 is available from the start", SaveManager.is_route_unlocked("route_47"))
+	_check("route 12 is locked before the first trip", not SaveManager.is_route_unlocked("route_12"))
+	SaveManager.data["trips_completed"] = 1
+	_check("route 12 unlocks after one trip", SaveManager.is_route_unlocked("route_12"))
+	SaveManager.data["trips_completed"] = 3
+	_check("route 5 unlocks after three trips", SaveManager.is_route_unlocked("route_5"))
+	_check("unlocked route can be selected", SaveManager.set_selected_route("route_5") and SaveManager.get_selected_route() == "route_5")
+	SaveManager.data = SaveManager.DEFAULT_DATA.duplicate(true)
+	RouteDefinition.set_active_route(RouteDefinition.DEFAULT_ROUTE_ID)
 
 	# --- save/load roundtrip ---
 	SaveManager.data["money"] = 999
@@ -127,6 +144,10 @@ func _run() -> void:
 	_check("trip summary has total", summary.has("total"))
 	_check("trip summary total > 0", summary.total > 0)
 	_check("trip summary has rating 1-3", summary.rating >= 1 and summary.rating <= 3)
+	var money_before_reward := SaveManager.get_money()
+	_check("double reward can be requested after a trip", GameManager.claim_double_reward())
+	_check("local rewarded fallback grants exactly one extra trip total", SaveManager.get_money() == money_before_reward + int(summary.total))
+	_check("double reward cannot be claimed twice", not GameManager.claim_double_reward())
 
 	# --- PlatformService fallback ---
 	PlatformService.init()

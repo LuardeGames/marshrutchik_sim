@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-GODOT_BIN="${GODOT_BIN:-godot}"
+if [[ -n "${GODOT_BIN:-}" ]]; then
+  GODOT_BIN="$GODOT_BIN"
+elif command -v godot4 >/dev/null 2>&1; then
+  GODOT_BIN="$(command -v godot4)"
+else
+  GODOT_BIN="$(command -v godot || true)"
+fi
+if [[ -z "$GODOT_BIN" ]]; then
+  echo "Godot 4.6 was not found. Set GODOT_BIN=/path/to/godot4." >&2
+  exit 127
+fi
 test_data="$(mktemp -d)"
 trap 'rm -rf "$test_data"' EXIT
 export XDG_DATA_HOME="$test_data"
