@@ -32,6 +32,7 @@ static func build(parent: Node3D) -> Dictionary:
 		stop_by_waypoint[wp_index] = def.id
 
 	_build_districts(parent, waypoints, stop_defs)
+	_build_city_variety(parent)
 	CityDressing.build(parent, waypoints)
 	_build_filler(parent, waypoints, RandomNumberGenerator.new())
 	_build_trees(parent, waypoints)
@@ -438,6 +439,50 @@ static func _build_depot(parent: Node3D, center: Vector3, perp: Vector3, rng: Ra
 		var offset := perp * 22.0 + tangent * (i - 1) * 8.0
 		_box(parent, center + offset + Vector3(0, 2.2, 0), Vector3(5.5, 4.4, 7.0), Color(0.4, 0.42, 0.4))
 	_box(parent, center + perp * 22.0 + Vector3(0, 0.05, 0), Vector3(10.0, 0.05, 24.0), Color(0.3, 0.3, 0.3), false)
+
+static func _build_city_variety(parent: Node3D) -> void:
+	# A few deliberately different silhouettes break the endless panel-block
+	# rhythm: brick houses, Stalin-era frontage, a school, a fire station and
+	# a small private-sector street typical of a provincial CIS city.
+	_build_brick_house(parent, Vector3(-105, 0, -520), Vector3(24, 15, 12), 0.0)
+	_build_brick_house(parent, Vector3(90, 0, -520), Vector3(30, 18, 12), 0.0)
+	_build_stalinka(parent, Vector3(440, 0, 210), Vector3(32, 18, 16))
+	_build_school(parent, Vector3(-150, 0, 125), Vector3(30, 7, 18))
+	_build_fire_station(parent, Vector3(710, 0, 120), Vector3(24, 6, 16))
+	_build_private_street(parent, Vector3(-235, 0, 80))
+
+static func _build_brick_house(parent: Node3D, pos: Vector3, size: Vector3, y_rot: float) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("a86e55"), true, y_rot)
+	_add_window_band(building, size)
+	_box(parent, pos + Vector3(0, size.y + 0.18, 0), Vector3(size.x + 0.45, 0.35, size.z + 0.45), Color("5b4b43"), false, y_rot)
+
+static func _build_stalinka(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("b8a486"))
+	_add_window_band(building, size)
+	for x in [-size.x * 0.34, size.x * 0.34]:
+		_box(parent, pos + Vector3(x, size.y * 0.5, -size.z * 0.53), Vector3(0.55, size.y, 0.30), Color("8d7962"), false)
+	_box(parent, pos + Vector3(0, size.y + 0.25, 0), Vector3(size.x + 2.0, 0.5, size.z + 2.0), Color("756654"), false)
+
+static func _build_school(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("c7b98f"))
+	_add_window_band(building, size)
+	_box(parent, pos + Vector3(0, size.y + 0.15, 0), Vector3(size.x + 0.5, 0.30, size.z + 0.5), Color("6d766d"), false)
+	BusVisual.label(parent, "ШКОЛА № 7", pos + Vector3(0, 3.1, -size.z * 0.54), PI, 0.004)
+	_box(parent, pos + Vector3(0, 0.35, -size.z * 0.9), Vector3(9.0, 0.7, 5.0), Color("57734d"), false)
+
+static func _build_fire_station(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("a85643"))
+	_add_window_band(building, size)
+	for x in [-7.0, 0.0, 7.0]:
+		_box(parent, pos + Vector3(x, 1.45, -size.z * 0.54), Vector3(5.0, 2.4, 0.12), Color("3f5558"), false)
+	BusVisual.label(parent, "ПОЖАРНАЯ ЧАСТЬ", pos + Vector3(0, size.y + 0.7, -size.z * 0.54), PI, 0.003)
+
+static func _build_private_street(parent: Node3D, origin: Vector3) -> void:
+	for i in range(4):
+		var pos := origin + Vector3(float(i) * 28.0, 0, 0)
+		_box(parent, pos + Vector3(0, 2.2, 0), Vector3(18.0, 4.4, 10.0), Color("b58d68"))
+		_box(parent, pos + Vector3(0, 4.6, 0), Vector3(19.0, 0.35, 11.0), Color("5c4f43"), false)
+		_box(parent, pos + Vector3(0, 0.45, -6.4), Vector3(20.0, 0.9, 0.18), Color("7c684c"), true)
 
 static func _add_window_band(building: Node3D, size: Vector3) -> void:
 	for child in building.get_children():
