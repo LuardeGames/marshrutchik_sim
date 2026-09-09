@@ -36,6 +36,7 @@ static func build(parent: Node3D) -> Dictionary:
 	CityDressing.build(parent, waypoints)
 	_build_filler(parent, waypoints, RandomNumberGenerator.new())
 	_build_trees(parent, waypoints)
+	_build_pocket_gardens(parent)
 
 	return {
 		"stops": stops,
@@ -174,6 +175,7 @@ static func _build_road(parent: Node3D, waypoints: Array[Vector3]) -> void:
 		var angle := atan2(dir.x, dir.z)
 
 		road_entries.append({"size": Vector3(ROAD_WIDTH, 0.12, length), "position": Vector3(mid.x, 0.06, mid.z), "y_rot": angle})
+		_register_road_surface(parent, a, b, ROAD_WIDTH, ROAD_WIDTH * 0.5)
 
 		# center dashed line
 		var dash_count: int = max(2, int(length / 8.0))
@@ -559,6 +561,7 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 	var link_surfaces: Array = []
 	for link in links:
 		streets.append(link)
+		_register_road_surface(parent, link[0], link[1], 10.0, 5.0)
 		var delta: Vector3 = link[1]-link[0]
 		link_surfaces.append({"size":Vector3(10,0.14,delta.length()+10),"position":(link[0]+link[1])*0.5+Vector3(0,0.07,0),"y_rot":atan2(delta.x,delta.z)})
 	_multimesh_boxes(parent,"ConnectingStreets",CityMaterials.surface("asphalt"),link_surfaces)
@@ -634,6 +637,7 @@ static func _build_roundabout(parent: Node3D, streets: Array, center: Vector3, r
 		_box(parent, tree_pos, Vector3(1.0, 1.6, 1.0), Color("54704d"), true)
 
 static func _build_narrow_street(parent: Node3D, streets: Array, start: Vector3, finish: Vector3) -> void:
+	_register_road_surface(parent, start, finish, 6.2, 4.0)
 	var dir: Vector3 = (finish - start).normalized()
 	var middle: Vector3 = (start + finish) * 0.5
 	_box(parent, middle + Vector3(0, 0.05, 0), Vector3(6.2, 0.12, start.distance_to(finish) + 8.0), Color("343b3b"), false, atan2(dir.x, dir.z))
@@ -647,6 +651,7 @@ static func _build_narrow_street(parent: Node3D, streets: Array, start: Vector3,
 static func _build_bridge_feature(parent: Node3D, streets: Array) -> void:
 	var start := Vector3(250, 0, -80)
 	var finish := Vector3(380, 0, -80)
+	_register_road_surface(parent, start, finish, 12.8, 0.0)
 	var dir: Vector3 = (finish - start).normalized()
 	var side: Vector3 = Vector3(-dir.z, 0, dir.x)
 	streets.append([start, finish])
@@ -658,6 +663,61 @@ static func _build_bridge_feature(parent: Node3D, streets: Array) -> void:
 		_box(parent, post_pos + side * 6.3 + Vector3(0, 0.9, 0), Vector3(0.34, 1.8, 0.34), Color("8e887a"), true)
 		_box(parent, post_pos - side * 6.3 + Vector3(0, 0.9, 0), Vector3(0.34, 1.8, 0.34), Color("8e887a"), true)
 
+
+## Same oriented rectangles as the asphalt meshes, including extended ends.
+static func _register_road_surface(parent: Node3D, a: Vector3, b: Vector3, width: float, extension: float) -> void:
+	var surfaces: Array = parent.get_meta("road_surfaces", [])
+	surfaces.append({"a": a, "b": b, "width": width, "extension": extension})
+	parent.set_meta("road_surfaces", surfaces)
+
+static func is_road_surface(pos: Vector3, surfaces: Array, margin: float = 0.0) -> bool:
+	for surface: Dictionary in surfaces:
+		var a: Vector3 = surface["a"]
+		var b: Vector3 = surface["b"]
+		var direction: Vector3 = (b - a).normalized()
+		var offset: Vector3 = pos - a
+		var along: float = offset.dot(direction)
+		var lateral: float = absf(offset.dot(Vector3(-direction.z, 0, direction.x)))
+		var extension: float = float(surface["extension"]) + margin
+		if along >= -extension and along <= a.distance_to(b) + extension and lateral <= float(surface["width"]) * 0.5 + margin:
+			return true
+	return false
+
+## Small, reserved garden lots close gaps without placing another slab.
+static func _build_pocket_gardens(parent: Node3D) -> void:
+	var occupied: Array[Rect2] = []
+	_collect_occupied(parent, occupied)
+	var surfaces: Array = parent.get_meta("road_surfaces", [])
+	var paving: Array = []
+	var planters: Array = []
+	var foliage: Array = []
+	var seats: Array = []
+	var count: int = 0
+	for x in range(-120, 741, 22):
+		for z in range(-580, 261, 22):
+			var pos := Vector3(x, 0, z)
+			var lot := Rect2(Vector2(x - 7, z - 7), Vector2(14, 14))
+			var blocked: bool = is_road_surface(pos, surfaces, 13.0)
+			for rect: Rect2 in occupied:
+				if lot.intersects(rect):
+					blocked = true
+					break
+			if blocked:
+				continue
+			occupied.append(lot)
+			paving.append({"size": Vector3(10, 0.06, 2), "position": pos + Vector3(0, 0.03, 0), "y_rot": 0.0})
+			for side: float in [-1.0, 1.0]:
+				var bed: Vector3 = pos + Vector3(0, 0.25, side * 3.8)
+				planters.append({"size": Vector3(8, 0.5, 1.6), "position": bed, "y_rot": 0.0})
+				foliage.append({"size": Vector3(7.5, 0.65, 1.2), "position": bed + Vector3(0, 0.5, 0), "y_rot": 0.0})
+				_invisible_collider(parent, bed, Vector3(8, 1.1, 1.6))
+				seats.append({"size": Vector3(2.2, 0.45, 0.65), "position": pos + Vector3(side * 3, 0.225, 1.8), "y_rot": 0.0})
+			count += 1
+	parent.set_meta("pocket_gardens", count)
+	_multimesh_boxes(parent, "GardenPaths", CityMaterials.surface("paving"), paving)
+	_multimesh_boxes(parent, "GardenBeds", CityMaterials.surface("concrete"), planters)
+	_multimesh_boxes(parent, "GardenHedges", BusVisual.material(Color("57704b")), foliage)
+	_multimesh_boxes(parent, "GardenSeats", BusVisual.material(Color("735442")), seats)
 
 static func _collect_occupied(node: Node, occupied: Array[Rect2]) -> void:
 	if node.name == "GroundBody":
@@ -759,7 +819,7 @@ static func _build_trees(parent: Node3D, waypoints: Array[Vector3]) -> void:
 					if pos.distance_to(sign_pos)<4.0:
 						hides_sign=true
 						break
-				if not hides_sign and _clear_of_road(pos, Vector3(1,1,1), waypoints):
+				if not hides_sign and _clear_of_road(pos, Vector3(1,1,1), waypoints) and not is_road_surface(pos, parent.get_meta("road_surfaces", []), 4.5):
 					transforms.append(Transform3D(Basis(), pos + Vector3(0, 0.8, 0)))
 					solid_positions.append(pos + Vector3(0, 1.15, 0))
 

@@ -48,7 +48,7 @@ func _ready() -> void:
 	rule_enforcement = RULE_ENFORCEMENT_SCRIPT.new()
 	rule_enforcement.name = "RuleEnforcement"
 	add_child(rule_enforcement)
-	rule_enforcement.setup(vehicle, route_manager)
+	rule_enforcement.setup(vehicle, route_manager, world)
 	incident_manager = ROAD_INCIDENT_MANAGER_SCRIPT.new()
 	incident_manager.name = "RoadIncidentManager"
 	add_child(incident_manager)
