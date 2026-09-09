@@ -15,6 +15,7 @@ var player_in_zone: StopArea = null
 var _stopped_properly: bool = false
 var _handled_current_stop: bool = false
 var _route_finished: bool = false
+var _reported_misses: Dictionary = {}
 
 const GOOD_STOP_DISTANCE := 3.0
 const FAR_STOP_DISTANCE := 7.0
@@ -26,6 +27,7 @@ func setup(stop_list: Array[StopArea], vehicle_ref: VehicleController) -> void:
 		s.vehicle_entered.connect(_on_vehicle_entered)
 		s.vehicle_exited.connect(_on_vehicle_exited)
 	current_stop_index = 0
+	_reported_misses.clear()
 	_refresh_markers()
 	next_stop_changed.emit(get_next_stop())
 
@@ -44,9 +46,11 @@ func _on_vehicle_exited(stop: StopArea) -> void:
 	if player_in_zone == stop:
 		player_in_zone = null
 	if stop == get_next_stop() and not _handled_current_stop:
-		# left the zone without stopping properly -> only penalize required stops
-		if stop.required:
-			pass # PassengerManager / HUD already nudges player; no hard fail in MVP
+		if stop.required and not _reported_misses.has(stop.stop_id):
+			_reported_misses[stop.stop_id] = true
+			GameManager.register_missed_stop()
+			GameManager.register_rule_violation("missed_stop", 45, 5.0, "Пропустили остановку «%s» · вернитесь и заберите пассажиров" % stop.stop_name)
+			EventBus.stop_reached.emit(stop.stop_id, "missed")
 
 func _process(_delta: float) -> void:
 	if _route_finished or vehicle == null or player_in_zone == null:
@@ -58,11 +62,18 @@ func _process(_delta: float) -> void:
 		return
 	if abs(vehicle.speed) < VehicleController.DOOR_SPEED_LIMIT:
 		var dist := stop.distance_to_pad(vehicle.global_position)
+		if dist > FAR_STOP_DISTANCE:
+			return
 		var quality := "good"
 		if dist > GOOD_STOP_DISTANCE:
 			quality = "far"
 		_handled_current_stop = true
 		stop_arrived.emit(stop, quality)
+
+func can_service_stop(stop: StopArea) -> bool:
+	if stop == null or stop != get_next_stop() or vehicle == null:
+		return false
+	return abs(vehicle.speed) < VehicleController.DOOR_SPEED_LIMIT and stop.distance_to_pad(vehicle.global_position) <= FAR_STOP_DISTANCE
 
 ## Called by PassengerManager once boarding/alighting is finished at the
 ## current stop and doors close (or a short delay elapses), to advance route.

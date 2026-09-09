@@ -3,6 +3,8 @@ extends Node3D
 ## vehicle/competitor, and wires up route/passenger/event/camera systems.
 
 const HUD_SCENE := preload("res://scenes/ui/hud.tscn")
+const RULE_ENFORCEMENT_SCRIPT := preload("res://scripts/world/rule_enforcement.gd")
+const ROAD_INCIDENT_MANAGER_SCRIPT := preload("res://scripts/world/road_incident_manager.gd")
 
 var world: Node3D
 var vehicle: VehicleController
@@ -11,6 +13,8 @@ var camera_rig: CameraRig
 var route_manager: RouteManager
 var passenger_manager: PassengerManager
 var event_manager: RandomEventManager
+var rule_enforcement: Node
+var incident_manager: Node
 var hud: CanvasLayer
 
 func _ready() -> void:
@@ -40,6 +44,15 @@ func _ready() -> void:
 	add_child(passenger_manager)
 	passenger_manager.setup(vehicle, route_manager, world, stop_order)
 	vehicle.boarding_manager = passenger_manager
+
+	rule_enforcement = RULE_ENFORCEMENT_SCRIPT.new()
+	rule_enforcement.name = "RuleEnforcement"
+	add_child(rule_enforcement)
+	rule_enforcement.setup(vehicle, route_manager)
+	incident_manager = ROAD_INCIDENT_MANAGER_SCRIPT.new()
+	incident_manager.name = "RoadIncidentManager"
+	add_child(incident_manager)
+	incident_manager.setup(vehicle, world)
 
 	event_manager = RandomEventManager.new()
 	event_manager.name = "RandomEventManager"

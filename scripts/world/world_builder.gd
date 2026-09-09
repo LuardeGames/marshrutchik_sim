@@ -240,7 +240,7 @@ static func _build_traffic_lights(parent: Node3D, waypoints: Array[Vector3]) -> 
 static func _build_traffic_dummies(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	var outer: Array[Vector3] = [Vector3(-140,0,-600),Vector3(760,0,-600),Vector3(760,0,280),Vector3(-140,0,280)]
 	for circuit in [waypoints,outer]:
-		var count := 12 if circuit==waypoints else 8
+		var count := 16 if circuit==waypoints else 10
 		for reverse in [false,true]:
 			for index in range(count):
 				var car := TrafficDummy.new()
@@ -481,15 +481,15 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 		for i in range(count):
 			for side in [-1.0,1.0]:
 				for row in range(2):
-					var pos: Vector3 = a.lerp(b,(i+0.5)/float(count))+perp*side*(19.0+row*42.0)
+					var pos: Vector3 = a.lerp(b,(i+0.5)/float(count))+perp*side*(23.0+row*38.0)
 					var size := Vector3(30, float(rng.randi_range(5,9))*3,12) if absf(dir.x)>0.5 else Vector3(12,float(rng.randi_range(5,9))*3,30)
 					_place_city_block(parent,pos,size,reserved,occupied,front_entries,rng)
 	# Fill the interior and extend beyond the outer avenue. Alternating slab
 	# orientation leaves connected courtyards instead of isolated towers.
-	for x in range(-240,881,42):
-		for z in range(-700,381,42):
+	for x in range(-280,921,56):
+		for z in range(-720,421,56):
 			var pos := Vector3(x,0,z)
-			var size := Vector3(30,float(rng.randi_range(5,12))*3,12) if (x/42+z/42)%2==0 else Vector3(12,float(rng.randi_range(5,12))*3,30)
+			var size := Vector3(30,float(rng.randi_range(5,12))*3,12) if (x/56+z/56)%2==0 else Vector3(12,float(rng.randi_range(5,12))*3,30)
 			_place_city_block(parent,pos,size,reserved,occupied,front_entries,rng)
 	parent.set_meta("city_buildings",front_entries.size())
 	parent.set_meta("city_streets",streets)

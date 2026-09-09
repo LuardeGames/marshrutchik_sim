@@ -44,6 +44,7 @@ var _exhaust_particles: GPUParticles3D
 var _dust_particles: GPUParticles3D
 
 var _horn_cooldown: float = 0.0
+var _door_warning_cooldown: float = 0.0
 var _prev_speed: float = 0.0
 var _comfort_cooldown: float = 0.0
 var _collision_cooldown: float = 0.0
@@ -126,6 +127,7 @@ func _handle_input(delta: float) -> void:
 		AudioManager.play_horn(definition.modern)
 		_horn_cooldown=0.7
 	_horn_cooldown=maxf(0.0,_horn_cooldown-delta)
+	_door_warning_cooldown=maxf(0.0,_door_warning_cooldown-delta)
 	if InputState.consume_doors_pressed():
 		_toggle_doors()
 
@@ -134,6 +136,9 @@ func _toggle_doors() -> void:
 		EventBus.notification.emit("Подождите, пассажиры ещё садятся", 1.5)
 		return
 	if abs(speed) > DOOR_SPEED_LIMIT:
+		if _door_warning_cooldown <= 0.0:
+			GameManager.register_rule_violation("moving_doors", 30, 3.0, "Нельзя открывать двери на ходу · штраф 30 ₽")
+			_door_warning_cooldown = 2.0
 		EventBus.notification.emit("Остановите маршрутку, чтобы открыть двери!", 1.5)
 		return
 	doors_open = not doors_open

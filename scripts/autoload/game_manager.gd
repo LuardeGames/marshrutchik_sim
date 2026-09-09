@@ -17,6 +17,8 @@ var trip_time: float = 0.0
 var passengers_delivered: int = 0
 var collisions: int = 0
 var missed_required_stops: int = 0
+var rule_violations: int = 0
+var fines_paid: int = 0
 var trip_running: bool = false
 var daily_challenge: Dictionary = {}
 var _double_reward_pending: bool = false
@@ -37,6 +39,8 @@ func start_trip() -> void:
 	passengers_delivered = 0
 	collisions = 0
 	missed_required_stops = 0
+	rule_violations = 0
+	fines_paid = 0
 	trip_running = true
 	daily_challenge = DailyChallenge.today()
 	RouteDefinition.set_active_route(SaveManager.get_selected_route())
@@ -80,9 +84,24 @@ func register_collision(strength: float) -> void:
 	var damage: float = clampf(strength * 16.0, 3.0, 18.0)
 	SaveManager.damage_vehicle(damage)
 	modify_comfort(-clamp(strength * 12.0, 3.0, 25.0))
-	EventBus.notification.emit("Удар! Состояние машины: %d%%" % int(round(SaveManager.get_vehicle_condition())), 2.0)
+	var fine := clampi(int(round(strength * 45.0)), 20, 70)
+	_register_fine(fine, "collision", clampf(strength * 3.0, 2.0, 8.0), "ДТП! Штраф %d ₽ · состояние машины: %d%%" % [fine, int(round(SaveManager.get_vehicle_condition()))])
 	EventBus.vehicle_collision.emit(strength)
 	AudioManager.play_collision(strength)
+
+func register_rule_violation(kind: String, fine: int, comfort_loss: float, message: String) -> void:
+	if not trip_running:
+		return
+	_register_fine(fine, kind, comfort_loss, message)
+
+func _register_fine(fine: int, kind: String, comfort_loss: float, message: String) -> void:
+	rule_violations += 1
+	fines_paid += maxi(0, fine)
+	EconomyManager.add_penalty(maxi(0, fine))
+	if comfort_loss > 0.0:
+		modify_comfort(comfort_loss * -1.0)
+	EventBus.rule_violation.emit(kind, fine)
+	EventBus.notification.emit(message, 2.6)
 
 func register_passenger_delivered() -> void:
 	passengers_delivered += 1
@@ -109,8 +128,10 @@ func complete_trip() -> Dictionary:
 	if trip_time < 210.0:
 		speed_bonus = 40
 		EconomyManager.add_stop_bonus(speed_bonus)
-	if missed_required_stops > 0:
-		EconomyManager.add_penalty(missed_required_stops * 30)
+	var late_penalty := 0
+	if trip_time > 240.0:
+		late_penalty = mini(120, int(ceil((trip_time - 240.0) / 20.0)) * 15)
+		EconomyManager.add_penalty(late_penalty)
 	var daily_bonus := 0
 	if DailyChallenge.is_completed(daily_challenge, comfort):
 		daily_bonus = int(daily_challenge.get("bonus", 0))
@@ -139,6 +160,9 @@ func complete_trip() -> Dictionary:
 		"comfort": comfort,
 		"vehicle_condition": SaveManager.get_vehicle_condition(),
 		"collisions": collisions,
+		"rule_violations": rule_violations,
+		"fines_paid": fines_paid,
+		"late_penalty": late_penalty,
 		"daily_title": String(daily_challenge.get("title", "")),
 		"daily_bonus": daily_bonus,
 	}
@@ -177,8 +201,8 @@ func _on_rewarded_finished(granted: bool) -> void:
 
 func _compute_rating(total: int) -> int:
 	var stars := 1
-	if comfort >= 60 and total >= 150:
+	if comfort >= 60 and total >= 150 and rule_violations <= 5:
 		stars = 2
-	if comfort >= 80 and total >= 280 and missed_required_stops == 0:
+	if comfort >= 80 and total >= 280 and missed_required_stops == 0 and rule_violations <= 1 and fines_paid <= 70:
 		stars = 3
 	return stars

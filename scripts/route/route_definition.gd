@@ -3,7 +3,7 @@ class_name RouteDefinition
 ## Data-driven closed-loop route definitions. The world is rebuilt from the
 ## selected route, while route 47 keeps the original MVP geometry.
 
-const ROAD_WIDTH := 10.0
+const ROAD_WIDTH := 12.0
 const DEFAULT_ROUTE_ID := "route_47"
 
 static var active_route_id: String = DEFAULT_ROUTE_ID

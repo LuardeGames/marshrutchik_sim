@@ -1,0 +1,100 @@
+extends Node
+class_name RuleEnforcement
+## Makes the route a driving job with consequences: speed limits, red lights,
+## staying on the road and keeping the correct direction all affect the trip.
+
+var vehicle: VehicleController
+var route_manager: RouteManager
+var speed_limit_kmh: int = 40
+var _previous_position := Vector3.ZERO
+var _cooldowns: Dictionary = {}
+
+const SPEED_TOLERANCE := 5.0
+const SIDEWALK_LIMIT := RouteDefinition.ROAD_WIDTH * 0.5 + 1.4
+
+func setup(vehicle_ref: VehicleController, route_ref: RouteManager) -> void:
+	vehicle = vehicle_ref
+	route_manager = route_ref
+	_previous_position = vehicle.global_position
+
+func _physics_process(delta: float) -> void:
+	if vehicle == null or not GameManager.trip_running or GameManager.state != GameManager.State.DRIVING:
+		return
+	for key in _cooldowns.keys():
+		_cooldowns[key] = maxf(0.0, float(_cooldowns[key]) - delta)
+	_check_speed()
+	_check_surface()
+	_check_red_lights()
+	_previous_position = vehicle.global_position
+
+func get_speed_limit_kmh() -> int:
+	if vehicle == null:
+		return 40
+	var nearest := _nearest_route_data(vehicle.global_position)
+	var limit := 40
+	if float(nearest.get("distance", 999.0)) < 18.0:
+		limit = 30
+	if _near_stop(vehicle.global_position, 16.0):
+		limit = 20
+	speed_limit_kmh = limit
+	return limit
+
+func _check_speed() -> void:
+	var limit := get_speed_limit_kmh()
+	if vehicle.get_speed_kmh() <= float(limit) + SPEED_TOLERANCE:
+		return
+	_try_violation("speed", 28 if limit >= 30 else 40, 2.0, "Слишком быстро: лимит %d км/ч · штраф %d ₽" % [limit, 28 if limit >= 30 else 40], 4.0)
+
+func _check_surface() -> void:
+	var data := _nearest_route_data(vehicle.global_position)
+	var distance := float(data.get("distance", 0.0))
+	if _near_stop(vehicle.global_position, 18.0):
+		return # the bus bay is deliberately outside the road centreline
+	if distance > SIDEWALK_LIMIT and absf(vehicle.speed) > 1.5:
+		_try_violation("sidewalk", 35, 3.0, "Съехали с дороги на тротуар · штраф 35 ₽", 3.0)
+	var direction: Vector3 = data.get("direction", Vector3.ZERO)
+	var forward := -vehicle.global_transform.basis.z
+	if direction.length() > 0.1 and forward.dot(direction) < -0.45 and vehicle.get_speed_kmh() > 8.0:
+		_try_violation("wrong_way", 50, 4.0, "Езда навстречу движению · штраф 50 ₽", 3.0)
+
+func _check_red_lights() -> void:
+	var forward := -vehicle.global_transform.basis.z
+	for node in get_tree().get_nodes_in_group("traffic_signals"):
+		var light := node as TrafficLightProp
+		if light == null or not light.is_red():
+			continue
+		var previous_relative: Vector3 = light.stop_point - _previous_position
+		var current_relative: Vector3 = light.stop_point - vehicle.global_position
+		var previous_along := previous_relative.dot(light.approach)
+		var current_along := current_relative.dot(light.approach)
+		var lateral := absf(current_relative.dot(Vector3(-light.approach.z, 0, light.approach.x)))
+		if previous_along > 0.0 and current_along <= 0.0 and lateral < 2.6 and forward.dot(light.approach) > 0.65 and vehicle.get_speed_kmh() > 8.0:
+			_try_violation("red_light", 60, 5.0, "Проехали на красный · штраф 60 ₽", 2.5)
+
+func _try_violation(kind: String, fine: int, comfort_loss: float, message: String, cooldown: float) -> void:
+	if float(_cooldowns.get(kind, 0.0)) > 0.0:
+		return
+	_cooldowns[kind] = cooldown
+	GameManager.register_rule_violation(kind, fine, comfort_loss, message)
+
+func _near_stop(pos: Vector3, radius: float) -> bool:
+	for stop in RouteDefinition.stops():
+		if pos.distance_to(RouteDefinition.stop_position(int(stop.waypoint_index))) < radius:
+			return true
+	return false
+
+func _nearest_route_data(pos: Vector3) -> Dictionary:
+	var points := RouteDefinition.waypoints()
+	var best := INF
+	var nearest := Vector3.ZERO
+	var direction := Vector3.ZERO
+	for i in range(points.size()):
+		var a: Vector3 = points[i]
+		var b: Vector3 = points[(i + 1) % points.size()]
+		var projected := Geometry3D.get_closest_point_to_segment(pos, a, b)
+		var distance := pos.distance_to(projected)
+		if distance < best:
+			best = distance
+			nearest = projected
+			direction = (b - a).normalized()
+	return {"distance": best, "point": nearest, "direction": direction}

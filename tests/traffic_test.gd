@@ -21,7 +21,7 @@ func run() -> void:
 	for child in game.world.get_children():
 		if child is TrafficDummy:
 			cars.append(child)
-	check(cars.size()==40,"40 ambient cars spawn")
+	check(cars.size()>=50,"dense ambient traffic spawns")
 	var signals := get_nodes_in_group("traffic_signals")
 	check(signals.size()==6,"six signal heads control three junctions")
 	var conflict := false
