@@ -45,6 +45,22 @@ func _update_lights() -> void:
 		materials[i].emission_energy_multiplier = 1.4 if i==_phase else 0.0
 
 func _build() -> void:
+	var solid_body := StaticBody3D.new()
+	solid_body.collision_layer = 1
+	var pole_shape := CollisionShape3D.new()
+	var pole_box := BoxShape3D.new()
+	pole_box.size = Vector3(0.28, 3.5, 0.28)
+	pole_shape.shape = pole_box
+	pole_shape.position = Vector3(0, 1.75, 0)
+	solid_body.add_child(pole_shape)
+	var head_shape := CollisionShape3D.new()
+	var head_box := BoxShape3D.new()
+	head_box.size = Vector3(0.65, 1.4, 0.45)
+	head_shape.shape = head_box
+	head_shape.position = Vector3(0, 3.6, 0)
+	solid_body.add_child(head_shape)
+	add_child(solid_body)
+
 	var pole := MeshInstance3D.new()
 	var pole_mesh := CylinderMesh.new()
 	pole_mesh.top_radius = 0.09

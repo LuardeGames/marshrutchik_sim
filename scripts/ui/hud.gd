@@ -18,6 +18,10 @@ var next_stop_label: Label
 var route_dots: HBoxContainer
 var notification_label: Label
 var notification_timer: float = 0.0
+var fine_banner: PanelContainer
+var fine_amount_label: Label
+var fine_detail_label: Label
+var fine_timer: float = 0.0
 
 var change_popup: PanelContainer
 var result_layer: Control
@@ -49,6 +53,7 @@ func _ready() -> void:
 	_build_top_bar(root)
 	_build_route_bar(root)
 	_build_notification(root)
+	_build_fine_banner(root)
 	_build_change_popup(root)
 	_build_menu_button(root)
 	if is_touch_device:
@@ -63,7 +68,9 @@ func _ready() -> void:
 	EventBus.comfort_changed.connect(_on_comfort_changed)
 	EventBus.money_earned.connect(_on_money_earned)
 	EventBus.change_choice_requested.connect(_on_change_requested)
+	EventBus.rule_violation.connect(_on_rule_violation)
 	EventBus.trip_completed.connect(_on_trip_completed)
+	EventBus.trip_failed.connect(_on_trip_failed)
 	GameManager.double_reward_claimed.connect(_on_double_reward_claimed)
 	if route_manager:
 		route_manager.next_stop_changed.connect(_on_next_stop_changed)
@@ -86,6 +93,12 @@ func _process(delta: float) -> void:
 		passengers_label.text = "В салоне: %d / %d" % [vehicle.passengers_aboard, vehicle.capacity]
 	if rules_label:
 		rules_label.text = "Штрафы: %d ₽ · Ошибки: %d" % [GameManager.fines_paid, GameManager.rule_violations]
+	if fine_timer > 0.0:
+		fine_timer -= delta
+		if fine_timer <= 0.0 and fine_banner:
+			var fine_tween := create_tween()
+			fine_tween.tween_property(fine_banner, "modulate:a", 0.0, 0.35)
+			fine_tween.tween_callback(fine_banner.hide)
 	_refresh_context()
 	if notification_timer > 0.0:
 		notification_timer -= delta
@@ -238,6 +251,62 @@ func _on_notification(text: String, duration: float) -> void:
 	notification_label.modulate.a = 1.0
 	notification_timer = duration
 
+func _build_fine_banner(root: Control) -> void:
+	var wrapper := CenterContainer.new()
+	wrapper.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	wrapper.position = Vector2(0, 112)
+	wrapper.custom_minimum_size = Vector2(0, 112)
+	wrapper.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(wrapper)
+	fine_banner = PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.48, 0.055, 0.045, 0.96)
+	style.border_color = Color("ffb04d")
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(14)
+	style.shadow_color = Color(0.12, 0.0, 0.0, 0.75)
+	style.shadow_size = 12
+	fine_banner.add_theme_stylebox_override("panel", style)
+	fine_banner.custom_minimum_size = Vector2(420, 96)
+	fine_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wrapper.add_child(fine_banner)
+	var col := VBoxContainer.new()
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_theme_constant_override("separation", 0)
+	fine_banner.add_child(col)
+	var title := UITheme.make_label("⚠  НАРУШЕНИЕ", 18, Color("ffe4a6"), true)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(title)
+	fine_amount_label = UITheme.make_label("−0 ₽", 34, Color.WHITE, true)
+	fine_amount_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(fine_amount_label)
+	fine_detail_label = UITheme.make_label("", 15, Color("ffe4d0"))
+	fine_detail_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(fine_detail_label)
+	fine_banner.visible = false
+
+func _on_rule_violation(kind: String, fine: int) -> void:
+	if fine_banner == null:
+		return
+	var detail: String = "Нарушение правил"
+	match kind:
+		"speed": detail = "Превышение скорости"
+		"red_light": detail = "Проезд на красный"
+		"moving_doors": detail = "Двери открыты на ходу"
+		"wrong_direction": detail = "Движение против потока"
+		"sidewalk": detail = "Езда по тротуару"
+		"off_route": detail = "Съезд с маршрута"
+		"collision": detail = "Опасное столкновение"
+		_: detail = kind
+	fine_amount_label.text = "−%d ₽" % fine
+	fine_detail_label.text = detail
+	fine_banner.show()
+	fine_banner.modulate.a = 1.0
+	fine_timer = 3.2
+	var flash := create_tween()
+	flash.tween_property(fine_banner, "scale", Vector2(1.06, 1.06), 0.10)
+	flash.tween_property(fine_banner, "scale", Vector2.ONE, 0.18)
+
 # ---------------------------------------------------------------------------
 # Change-giving mini event
 # ---------------------------------------------------------------------------
@@ -371,7 +440,12 @@ func _on_trip_completed(summary: Dictionary) -> void:
 	_change_pending=false
 	change_popup.hide()
 	pause_layer.hide()
+	if fine_banner:
+		fine_banner.hide()
 	InputState.reset_touch()
+	var title: Label = result_layer.find_child("Title", true, false)
+	title.text = "Рейс завершён"
+	title.add_theme_color_override("font_color", UITheme.COLOR_ACCENT)
 	var vbox: VBoxContainer = result_layer.find_child("ResultVBox", true, false)
 	for c in vbox.get_children():
 		if c.name != "Title":
@@ -435,6 +509,53 @@ func _on_trip_completed(summary: Dictionary) -> void:
 		AudioManager.play_ui_click()
 		GameManager.go_to_menu())
 
+	result_layer.visible = true
+	result_layer.modulate.a = 0.0
+	var tw := create_tween()
+	tw.tween_property(result_layer, "modulate:a", 1.0, 0.35)
+
+func _on_trip_failed(summary: Dictionary) -> void:
+	_change_pending=false
+	change_popup.hide()
+	pause_layer.hide()
+	if fine_banner:
+		fine_banner.hide()
+	InputState.reset_touch()
+	var title: Label = result_layer.find_child("Title", true, false)
+	title.text = "РЕЙС СОРВАН"
+	title.add_theme_color_override("font_color", UITheme.COLOR_BAD)
+	var vbox: VBoxContainer = result_layer.find_child("ResultVBox", true, false)
+	for c in vbox.get_children():
+		if c.name != "Title":
+			c.queue_free()
+	await get_tree().process_frame
+	vbox.add_child(UITheme.make_label(String(summary.get("reason", "Плохое вождение")), 19, UITheme.COLOR_BAD, true))
+	vbox.add_child(UITheme.make_label("Пассажиры не доехали: %d" % int(summary.get("passengers", 0)), 17))
+	vbox.add_child(UITheme.make_label("Большой штраф: −%d ₽" % int(summary.get("penalties", 0)), 20, UITheme.COLOR_BAD, true))
+	vbox.add_child(UITheme.make_label("Нарушения: %d · столкновений: %d" % [int(summary.get("rule_violations", 0)), int(summary.get("collisions", 0))], 16, UITheme.COLOR_TEXT_DIM))
+	vbox.add_child(UITheme.make_label("Состояние машины: %d%%" % int(round(summary.get("vehicle_condition", 100.0))), 16, UITheme.COLOR_TEXT_DIM))
+	vbox.add_child(UITheme.make_label("Так ездить нельзя — следующий рейс начнётся с новым счётом ошибок.", 15, UITheme.COLOR_TEXT_DIM))
+	var retry := Button.new()
+	retry.text = "Повторить рейс"
+	UITheme.style_button(retry, UITheme.COLOR_ACCENT, Color("101416"))
+	vbox.add_child(retry)
+	retry.pressed.connect(func():
+		AudioManager.play_ui_click()
+		GameManager.start_trip())
+	var garage_btn := Button.new()
+	garage_btn.text = "В гараж"
+	UITheme.style_button(garage_btn, UITheme.COLOR_PANEL.lightened(0.1), UITheme.COLOR_TEXT)
+	vbox.add_child(garage_btn)
+	garage_btn.pressed.connect(func():
+		AudioManager.play_ui_click()
+		GameManager.go_to_garage())
+	var menu_btn := Button.new()
+	menu_btn.text = "Главное меню"
+	UITheme.style_button(menu_btn, UITheme.COLOR_PANEL.lightened(0.1), UITheme.COLOR_TEXT)
+	vbox.add_child(menu_btn)
+	menu_btn.pressed.connect(func():
+		AudioManager.play_ui_click()
+		GameManager.go_to_menu())
 	result_layer.visible = true
 	result_layer.modulate.a = 0.0
 	var tw := create_tween()

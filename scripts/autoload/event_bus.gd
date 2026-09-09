@@ -11,6 +11,7 @@ signal random_event_triggered(event_name: String)
 signal change_choice_requested(fare: int, given: int, options: Array)
 signal trip_started
 signal trip_completed(summary: Dictionary)
+signal trip_failed(summary: Dictionary)
 signal upgrade_purchased(upgrade_id: String, level: int)
 signal vehicle_collision(strength: float)
 signal competitor_took_passengers(stop_id: int, count: int)

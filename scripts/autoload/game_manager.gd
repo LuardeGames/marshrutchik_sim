@@ -2,7 +2,7 @@ extends Node
 ## Top level game state + orchestration. Scenes are switched from here so
 ## individual systems don't need to know about each other's scenes.
 
-enum State { MENU, DRIVING, RESULTS, GARAGE }
+enum State { MENU, DRIVING, RESULTS, FAILED, GARAGE }
 
 const GAMEPLAY_SCENE := "res://scenes/gameplay/gameplay.tscn"
 const MENU_SCENE := "res://scenes/main_menu/main_menu.tscn"
@@ -10,6 +10,7 @@ const GARAGE_SCENE := "res://scenes/garage/garage.tscn"
 
 var state: State = State.MENU
 var _last_summary: Dictionary = {}
+var _failure_reason: String = ""
 
 # --- running trip stats (reset at trip start) ---
 var comfort: float = 100.0
@@ -34,6 +35,7 @@ func start_trip() -> void:
 	AudioManager.set_game_paused(false)
 	InputState.reset_touch()
 	_last_summary = {}
+	_failure_reason = ""
 	comfort = 100.0
 	trip_time = 0.0
 	passengers_delivered = 0
@@ -80,6 +82,8 @@ func modify_comfort(delta: float) -> void:
 	EventBus.comfort_changed.emit(comfort)
 
 func register_collision(strength: float) -> void:
+	if not trip_running or state != State.DRIVING:
+		return
 	collisions += 1
 	var damage: float = clampf(strength * 16.0, 3.0, 18.0)
 	SaveManager.damage_vehicle(damage)
@@ -88,11 +92,15 @@ func register_collision(strength: float) -> void:
 	_register_fine(fine, "collision", clampf(strength * 3.0, 2.0, 8.0), "ДТП! Штраф %d ₽ · состояние машины: %d%%" % [fine, int(round(SaveManager.get_vehicle_condition()))])
 	EventBus.vehicle_collision.emit(strength)
 	AudioManager.play_collision(strength)
+	if trip_running and (SaveManager.get_vehicle_condition() <= 0.0 or collisions >= 6):
+		fail_trip("Машина разбита: слишком много столкновений", 350)
 
 func register_rule_violation(kind: String, fine: int, comfort_loss: float, message: String) -> void:
-	if not trip_running:
+	if not trip_running or state != State.DRIVING:
 		return
 	_register_fine(fine, kind, comfort_loss, message)
+	if trip_running and (rule_violations >= 8 or fines_paid >= 300):
+		fail_trip("Рейс сорван: инспектор снял маршрутку с линии", 400)
 
 func _register_fine(fine: int, kind: String, comfort_loss: float, message: String) -> void:
 	rule_violations += 1
@@ -102,6 +110,34 @@ func _register_fine(fine: int, kind: String, comfort_loss: float, message: Strin
 		modify_comfort(comfort_loss * -1.0)
 	EventBus.rule_violation.emit(kind, fine)
 	EventBus.notification.emit(message, 2.6)
+
+func fail_trip(reason: String, final_fine: int = 0) -> void:
+	if not trip_running or state != State.DRIVING:
+		return
+	if final_fine > 0:
+		fines_paid += final_fine
+		EconomyManager.add_penalty(final_fine)
+	_failure_reason = reason
+	trip_running = false
+	var summary := {
+		"reason": reason,
+		"passengers": passengers_delivered,
+		"fares": EconomyManager.trip_fares,
+		"penalties": EconomyManager.trip_penalties,
+		"total": EconomyManager.get_trip_total(),
+		"comfort": comfort,
+		"vehicle_condition": SaveManager.get_vehicle_condition(),
+		"collisions": collisions,
+		"rule_violations": rule_violations,
+		"fines_paid": fines_paid,
+		"time": trip_time,
+	}
+	_last_summary = summary.duplicate(true)
+	state = State.FAILED
+	PlatformService.stop_gameplay()
+	PlatformService.save_cloud(SaveManager.data)
+	EventBus.trip_failed.emit(summary)
+	AudioManager.play_collision(1.0)
 
 func register_passenger_delivered() -> void:
 	passengers_delivered += 1
@@ -118,7 +154,9 @@ func format_time(t: float) -> String:
 ## Called by RouteManager once the final stop is reached. Builds the result
 ## summary dictionary and switches to results state (HUD shows ResultScreen).
 func complete_trip() -> Dictionary:
-	if state == State.RESULTS and not _last_summary.is_empty():
+	if (state == State.RESULTS or state == State.FAILED) and not _last_summary.is_empty():
+		return _last_summary.duplicate(true)
+	if not trip_running:
 		return _last_summary.duplicate(true)
 	trip_running = false
 	var comfort_bonus := int(round((comfort / 100.0) * 60))
