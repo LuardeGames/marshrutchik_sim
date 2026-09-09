@@ -27,6 +27,9 @@ func phase_at(time: float) -> int:
 func allows_traffic() -> bool:
 	return _phase == 2
 
+func is_red() -> bool:
+	return _phase == 0
+
 func _physics_process(delta: float) -> void:
 	if not get_node("/root/GameManager").trip_running:
 		return

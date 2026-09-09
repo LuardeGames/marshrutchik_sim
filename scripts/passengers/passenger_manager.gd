@@ -45,7 +45,7 @@ func _generate_waiting(stop_id: int) -> void:
 	var stop: StopArea = _stops_by_id.get(stop_id)
 	var list: Array = waiting.get(stop_id, [])
 	var multiplier: float = float(GameManager.daily_challenge.get("passenger_multiplier", 1.0))
-	var count: int = clampi(int(round(float(randi_range(4, 8)) * multiplier)), 3, 12)
+	var count: int = clampi(int(round(float(randi_range(7, 12)) * multiplier)), 5, 16)
 	for i in range(count):
 		var archetype := PassengerCatalog.random_archetype()
 		var dest := _pick_destination(stop_id)
@@ -121,10 +121,16 @@ func _on_doors_toggled(open: bool) -> void:
 	var stop := route_manager.player_in_zone
 	var next_stop := route_manager.get_next_stop()
 	if stop == null:
+		GameManager.register_rule_violation("illegal_door", 20, 2.0, "Двери открывают только на остановке · штраф 20 ₽")
 		EventBus.notification.emit("Здесь нет остановки - подъедьте к следующей: %s" % (next_stop.stop_name if next_stop else "?"), 2.0)
 		return
 	if stop != next_stop:
+		GameManager.register_rule_violation("wrong_stop", 25, 2.0, "Это не ваша остановка · штраф 25 ₽")
 		EventBus.notification.emit("Это не ваша остановка! Нужна: %s" % (next_stop.stop_name if next_stop else "?"), 2.0)
+		return
+	if not route_manager.can_service_stop(stop):
+		GameManager.register_rule_violation("bad_parking", 25, 2.0, "Подъедьте ближе к остановочному карману · штраф 25 ₽")
+		EventBus.notification.emit("Остановитесь в жёлтом кармане, чтобы принять пассажиров", 2.0)
 		return
 	if abs(vehicle.speed) > VehicleController.DOOR_SPEED_LIMIT:
 		return # vehicle_controller already told the player to stop first

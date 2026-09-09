@@ -72,6 +72,50 @@ static func build(parent: Node3D, waypoints: Array[Vector3]) -> void:
 		# District street plate.
 		BusVisual.box(plaza,Vector3(-1.7,2.24,-1.79),Vector3(1.8,0.26,0.03),BusVisual.material(Color("294a6b")))
 		_sign(plaza,"ул. МИРА, %d" % (i*8+3),Vector3(-1.7,2.24,-1.82),0.0018)
+	_build_ambient_life(parent, waypoints)
+
+static func _build_ambient_life(parent: Node3D, waypoints: Array[Vector3]) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 55129
+	var parked_colors := [Color("536a72"), Color("8b5148"), Color("b18d53"), Color("65745b")]
+	for i in range(waypoints.size()):
+		var a := waypoints[i]
+		var b := waypoints[(i + 1) % waypoints.size()]
+		var dir := (b - a).normalized()
+		var side := Vector3(-dir.z, 0, dir.x)
+		var length := a.distance_to(b)
+		for side_sign in [-1.0, 1.0]:
+			var t := 0.24 + float((i + int(side_sign > 0.0)) % 3) * 0.17
+			var start := a.lerp(b, t) + side * side_sign * (RouteDefinition.ROAD_WIDTH * 0.5 + 3.0)
+			var finish := a.lerp(b, minf(t + 0.22, 0.90)) + side * side_sign * (RouteDefinition.ROAD_WIDTH * 0.5 + 3.0)
+			if _near_stop(start) or start.distance_to(finish) < 8.0:
+				continue
+			var pedestrian := AmbientPedestrian.new()
+			pedestrian.start_point = start + Vector3(0, 0.04, 0)
+			pedestrian.end_point = finish + Vector3(0, 0.04, 0)
+			pedestrian.variant = rng.randi_range(0, 3)
+			pedestrian.walk_speed = rng.randf_range(0.8, 1.25)
+			parent.add_child(pedestrian)
+		if length > 110.0 and i % 2 == 0:
+			var parked_pos := a.lerp(b, 0.67) + side * (RouteDefinition.ROAD_WIDTH * 0.5 + 2.7)
+			if not _near_stop(parked_pos):
+				_parked_car(parent, parked_pos, dir, parked_colors[i % parked_colors.size()])
+
+static func _near_stop(pos: Vector3) -> bool:
+	for stop in RouteDefinition.stops():
+		if pos.distance_to(RouteDefinition.stop_position(int(stop.waypoint_index))) < 18.0:
+			return true
+	return false
+
+static func _parked_car(parent: Node3D, pos: Vector3, direction: Vector3, color: Color) -> void:
+	var car := Node3D.new()
+	car.name = "ParkedCar"
+	car.position = pos
+	car.rotation.y = atan2(direction.x, direction.z)
+	parent.add_child(car)
+	BusVisual.box(car, Vector3(0, 0.42, 0), Vector3(1.55, 0.55, 3.1), BusVisual.material(color))
+	BusVisual.box(car, Vector3(0, 0.82, -0.10), Vector3(1.25, 0.35, 1.45), BusVisual.material(Color("36484d"), 0.1))
+	BusVisual.box(car, Vector3(0, 0.36, -1.58), Vector3(1.62, 0.13, 0.08), BusVisual.material(Color("e0bf69")))
 
 static func _sign(parent: Node3D,text: String,pos: Vector3,pixel: float) -> void:
 	var label:=Label3D.new()

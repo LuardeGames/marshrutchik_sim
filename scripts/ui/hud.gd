@@ -12,6 +12,7 @@ var comfort_bar: ProgressBar
 var money_label: Label
 var speed_label: Label
 var passengers_label: Label
+var rules_label: Label
 var current_stop_label: Label
 var next_stop_label: Label
 var route_dots: HBoxContainer
@@ -83,6 +84,8 @@ func _process(delta: float) -> void:
 	if vehicle:
 		speed_label.text = "%d км/ч" % int(vehicle.get_speed_kmh())
 		passengers_label.text = "В салоне: %d / %d" % [vehicle.passengers_aboard, vehicle.capacity]
+	if rules_label:
+		rules_label.text = "Штрафы: %d ₽ · Ошибки: %d" % [GameManager.fines_paid, GameManager.rule_violations]
 	_refresh_context()
 	if notification_timer > 0.0:
 		notification_timer -= delta
@@ -134,6 +137,8 @@ func _build_top_bar(root: Control) -> void:
 	fill_sb.set_corner_radius_all(8)
 	comfort_bar.add_theme_stylebox_override("fill", fill_sb)
 	comfort_row.add_child(comfort_bar)
+	rules_label = UITheme.make_label("Штрафы: 0 ₽ · Ошибки: 0", 14, UITheme.COLOR_TEXT_DIM)
+	vbox.add_child(rules_label)
 
 func _on_comfort_changed(value: float) -> void:
 	if comfort_bar == null:
@@ -380,6 +385,7 @@ func _on_trip_completed(summary: Dictionary) -> void:
 	vbox.add_child(UITheme.make_label("Остановки и время: %d ₽" % summary.get("stop_bonus", 0), 18, UITheme.COLOR_GOOD))
 	vbox.add_child(UITheme.make_label("Бонус за комфорт: %d ₽" % summary.comfort_bonus, 18, UITheme.COLOR_GOOD))
 	vbox.add_child(UITheme.make_label("Штрафы: -%d ₽" % summary.penalties, 18, UITheme.COLOR_BAD))
+	vbox.add_child(UITheme.make_label("Нарушения: %d · оплачено штрафов: %d ₽" % [int(summary.get("rule_violations", 0)), int(summary.get("fines_paid", 0))], 16, UITheme.COLOR_BAD))
 	vbox.add_child(UITheme.make_label("Состояние машины: %d%% · столкновений: %d" % [int(round(summary.get("vehicle_condition",100.0))), int(summary.get("collisions",0))], 16, UITheme.COLOR_TEXT_DIM))
 	if int(summary.get("daily_bonus", 0)) > 0:
 		vbox.add_child(UITheme.make_label("Рейс дня «%s»: +%d ₽" % [summary.get("daily_title", ""), int(summary.daily_bonus)], 16, UITheme.COLOR_ACCENT_2))
@@ -552,7 +558,12 @@ func _build_context(root: Control) -> void:
 func _refresh_context() -> void:
 	if not vehicle or not route_manager or not context_label:
 		return
-	time_label.text="Время %s  ·  За рейс %d ₽" % [GameManager.format_time(GameManager.trip_time),EconomyManager.get_trip_total()]
+	var limit := 40
+	var scene := get_tree().current_scene
+	var enforcement = scene.get("rule_enforcement") if scene else null
+	if enforcement:
+		limit = enforcement.get_speed_limit_kmh()
+	time_label.text="Время %s  ·  За рейс %d ₽  ·  Лимит %d км/ч" % [GameManager.format_time(GameManager.trip_time),EconomyManager.get_trip_total(),limit]
 	var key:="Двери" if is_touch_device else "E"
 	if passenger_manager.boarding_pending>0:
 		context_label.text="Посадка и высадка · Подождите: %d" % passenger_manager.boarding_pending
