@@ -55,6 +55,9 @@ func _ready() -> void:
 		hud.bind(vehicle, route_manager, passenger_manager)
 
 	EventBus.trip_started.emit()
+	var daily := GameManager.daily_challenge
+	if not daily.is_empty():
+		EventBus.notification.emit("Рейс дня: %s — %s" % [daily.title, daily.description], 4.5)
 	_maybe_show_tutorial()
 
 func _spawn_vehicle(build_result: Dictionary) -> void:

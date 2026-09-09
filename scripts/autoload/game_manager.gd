@@ -18,12 +18,18 @@ var passengers_delivered: int = 0
 var collisions: int = 0
 var missed_required_stops: int = 0
 var trip_running: bool = false
+var daily_challenge: Dictionary = {}
+var _double_reward_pending: bool = false
+var _double_reward_claimed: bool = false
+signal double_reward_claimed(amount: int)
 
 func _ready() -> void:
 	PlatformService.init()
+	RouteDefinition.set_active_route(SaveManager.get_selected_route())
 
 func start_trip() -> void:
 	get_tree().paused = false
+	AudioManager.set_game_paused(false)
 	InputState.reset_touch()
 	_last_summary = {}
 	comfort = 100.0
@@ -32,12 +38,20 @@ func start_trip() -> void:
 	collisions = 0
 	missed_required_stops = 0
 	trip_running = true
+	daily_challenge = DailyChallenge.today()
+	RouteDefinition.set_active_route(SaveManager.get_selected_route())
+	_double_reward_pending = false
+	_double_reward_claimed = false
 	EconomyManager.reset_trip()
 	state = State.DRIVING
+	PlatformService.start_gameplay()
 	get_tree().change_scene_to_file(GAMEPLAY_SCENE)
 
 func go_to_menu() -> void:
 	get_tree().paused = false
+	AudioManager.set_game_paused(false)
+	PlatformService.stop_gameplay()
+	PlatformService.save_cloud(SaveManager.data)
 	InputState.reset_touch()
 	state = State.MENU
 	trip_running = false
@@ -45,6 +59,9 @@ func go_to_menu() -> void:
 
 func go_to_garage() -> void:
 	get_tree().paused = false
+	AudioManager.set_game_paused(false)
+	PlatformService.stop_gameplay()
+	PlatformService.save_cloud(SaveManager.data)
 	InputState.reset_touch()
 	state = State.GARAGE
 	trip_running = false
@@ -60,7 +77,10 @@ func modify_comfort(delta: float) -> void:
 
 func register_collision(strength: float) -> void:
 	collisions += 1
+	var damage: float = clampf(strength * 16.0, 3.0, 18.0)
+	SaveManager.damage_vehicle(damage)
 	modify_comfort(-clamp(strength * 12.0, 3.0, 25.0))
+	EventBus.notification.emit("Удар! Состояние машины: %d%%" % int(round(SaveManager.get_vehicle_condition())), 2.0)
 	EventBus.vehicle_collision.emit(strength)
 	AudioManager.play_collision(strength)
 
@@ -91,6 +111,11 @@ func complete_trip() -> Dictionary:
 		EconomyManager.add_stop_bonus(speed_bonus)
 	if missed_required_stops > 0:
 		EconomyManager.add_penalty(missed_required_stops * 30)
+	var daily_bonus := 0
+	if DailyChallenge.is_completed(daily_challenge, comfort):
+		daily_bonus = int(daily_challenge.get("bonus", 0))
+		if daily_bonus > 0:
+			EconomyManager.add_stop_bonus(daily_bonus)
 
 	var total := EconomyManager.get_trip_total()
 	var rating := _compute_rating(total)
@@ -112,13 +137,43 @@ func complete_trip() -> Dictionary:
 		"total": total,
 		"rating": rating,
 		"comfort": comfort,
+		"vehicle_condition": SaveManager.get_vehicle_condition(),
+		"collisions": collisions,
+		"daily_title": String(daily_challenge.get("title", "")),
+		"daily_bonus": daily_bonus,
 	}
 	_last_summary = summary.duplicate(true)
 	state = State.RESULTS
+	PlatformService.stop_gameplay()
+	PlatformService.save_cloud(SaveManager.data)
+	PlatformService.set_leaderboard_score(int(SaveManager.data.get("best_earnings", 0)))
 	EventBus.trip_completed.emit(summary)
 	AudioManager.play_trip_complete()
 	PlatformService.maybe_show_interstitial(int(SaveManager.data.get("trips_completed", 0)))
 	return summary
+
+func claim_double_reward() -> bool:
+	if state != State.RESULTS or _last_summary.is_empty() or _double_reward_claimed or _double_reward_pending or PlatformService.is_ad_active():
+		return false
+	if int(_last_summary.get("total", 0)) <= 0:
+		return false
+	_double_reward_pending = true
+	PlatformService.rewarded_finished.connect(_on_rewarded_finished, CONNECT_ONE_SHOT)
+	PlatformService.show_rewarded("double_reward")
+	return true
+
+func _on_rewarded_finished(granted: bool) -> void:
+	_double_reward_pending = false
+	if not granted or _double_reward_claimed or _last_summary.is_empty():
+		return
+	var amount := maxi(0, int(_last_summary.get("total", 0)))
+	if amount <= 0:
+		return
+	SaveManager.add_money(amount)
+	_double_reward_claimed = true
+	_last_summary["double_reward_claimed"] = true
+	PlatformService.save_cloud(SaveManager.data)
+	double_reward_claimed.emit(amount)
 
 func _compute_rating(total: int) -> int:
 	var stars := 1

@@ -6,6 +6,8 @@ const SAVE_PATH := "user://savegame.json"
 const DEFAULT_DATA := {
 	"money": 300,
 	"route_mastered": false,
+	"unlocked_routes": ["route_47"],
+	"selected_route": "route_47",
 	"upgrades": {
 		"engine": 0,
 		"brakes": 0,
@@ -18,6 +20,7 @@ const DEFAULT_DATA := {
 	"best_rating": 0,
 	"best_earnings": 0,
 	"trips_completed": 0,
+	"vehicle_condition": 100.0,
 	"sound": {
 		"master": 1.0,
 		"music": 0.35,
@@ -77,6 +80,21 @@ func _validate_data() -> void:
 		data.selected_vehicle="old_marshrutka"
 	data.best_rating=clampi(int(data.best_rating),0,3)
 	data.trips_completed=maxi(0,int(data.trips_completed))
+	data.vehicle_condition=clampf(float(data.get("vehicle_condition",100.0)),0.0,100.0)
+	_refresh_route_unlocks()
+	if not RouteDefinition.route_ids().has(String(data.get("selected_route", RouteDefinition.DEFAULT_ROUTE_ID))):
+		data.selected_route = RouteDefinition.DEFAULT_ROUTE_ID
+	if not data.unlocked_routes.has(data.selected_route):
+		data.selected_route = RouteDefinition.DEFAULT_ROUTE_ID
+
+func _refresh_route_unlocks() -> void:
+	var unlocked: Array = [RouteDefinition.DEFAULT_ROUTE_ID]
+	var trips := int(data.get("trips_completed", 0))
+	for route_id in RouteDefinition.route_ids():
+		if trips >= RouteDefinition.route_unlock_trips(route_id):
+			if not unlocked.has(route_id):
+				unlocked.append(route_id)
+	data.unlocked_routes = unlocked
 
 func save_game() -> void:
 	var temporary:=SAVE_PATH+".tmp"
@@ -134,13 +152,52 @@ func set_selected_vehicle(vehicle_id: String) -> void:
 func get_selected_vehicle() -> String:
 	return String(data.get("selected_vehicle", "old_marshrutka"))
 
+func is_route_unlocked(route_id: String) -> bool:
+	_refresh_route_unlocks()
+	return data.get("unlocked_routes", []).has(route_id)
+
+func set_selected_route(route_id: String) -> bool:
+	if not is_route_unlocked(route_id):
+		return false
+	data["selected_route"] = route_id
+	RouteDefinition.set_active_route(route_id)
+	save_game()
+	return true
+
+func get_selected_route() -> String:
+	var route_id := String(data.get("selected_route", RouteDefinition.DEFAULT_ROUTE_ID))
+	return route_id if is_route_unlocked(route_id) else RouteDefinition.DEFAULT_ROUTE_ID
+
 func register_trip_result(earnings: int, rating: int) -> void:
 	data["trips_completed"] = int(data.get("trips_completed", 0)) + 1
 	if rating > int(data.get("best_rating", 0)):
 		data["best_rating"] = rating
 	if earnings > int(data.get("best_earnings", 0)):
 		data["best_earnings"] = earnings
+	_refresh_route_unlocks()
 	save_game()
+
+func get_vehicle_condition() -> float:
+	return clampf(float(data.get("vehicle_condition",100.0)),0.0,100.0)
+
+func damage_vehicle(amount: float) -> void:
+	if amount <= 0.0:
+		return
+	data["vehicle_condition"] = clampf(get_vehicle_condition() - amount, 0.0, 100.0)
+	save_game()
+
+func get_repair_cost() -> int:
+	return int(ceil((100.0 - get_vehicle_condition()) * 4.0))
+
+func repair_vehicle() -> bool:
+	var cost := get_repair_cost()
+	if cost <= 0:
+		return false
+	if not spend_money(cost):
+		return false
+	data["vehicle_condition"] = 100.0
+	save_game()
+	return true
 
 func get_sound_setting(key: String) -> float:
 	return float(data.get("sound", {}).get(key, 1.0))

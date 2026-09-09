@@ -53,7 +53,7 @@ func _build_visual() -> void:
 	BusVisual.box(self,Vector3(3.5,1.8,-5.5),Vector3(0.09,3.3,0.09),metal)
 	BusVisual.box(self,Vector3(3.5,3.1,-5.5),Vector3(0.07,0.75,0.7),BusVisual.material(Color("285b82")))
 	var number := Label3D.new()
-	number.text="47"
+	number.text=RouteDefinition.route_number()
 	number.font_size=64
 	number.pixel_size=0.008
 	number.position=Vector3(3.45,3.1,-5.5)

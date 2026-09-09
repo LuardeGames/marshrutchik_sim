@@ -3,9 +3,10 @@ class_name RouteMap
 ## Heading and road topology stay readable when the destination is offscreen.
 var vehicle: VehicleController
 var route_manager: RouteManager
-var points := RouteDefinition.waypoints()
+var points: Array[Vector3] = []
 
 func _ready() -> void:
+	points = RouteDefinition.waypoints()
 	custom_minimum_size=Vector2(220,180)
 	mouse_filter=Control.MOUSE_FILTER_IGNORE
 

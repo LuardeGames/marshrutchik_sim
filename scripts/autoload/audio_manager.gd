@@ -10,6 +10,7 @@ var _engine_phase: float = 0.0
 var _engine_target_freq: float = 60.0
 var _engine_current_freq: float = 60.0
 var _engine_enabled: bool = false
+var _game_paused: bool = false
 
 var _sfx_bus_volume: float = 1.0
 var _paz := false
@@ -29,13 +30,20 @@ func _ready() -> void:
 	_engine_playback = _engine_player.get_stream_playback()
 	set_process(true)
 	_apply_saved_settings()
-	_music=AudioStreamPlayer.new()
-	var track: AudioStreamWAV=load("res://assets/audio/radio_evening.wav").duplicate()
-	track.loop_mode=AudioStreamWAV.LOOP_FORWARD
-	track.loop_end=track.data.size()/2
-	_music.stream=track
-	add_child(_music)
-	_music.play()
+	# A new checkout may briefly start before the editor has generated the WAV
+	# import cache. Music is optional, so never let that turn into a startup
+	# crash; it starts normally as soon as the resource is available.
+	var loaded_track := load("res://assets/audio/radio_evening.wav")
+	if loaded_track is AudioStreamWAV:
+		_music=AudioStreamPlayer.new()
+		var track: AudioStreamWAV=(loaded_track as AudioStreamWAV).duplicate()
+		track.loop_mode=AudioStreamWAV.LOOP_FORWARD
+		track.loop_end=track.data.size()/2
+		_music.stream=track
+		add_child(_music)
+		_music.play()
+	else:
+		push_warning("AudioManager: radio track is unavailable; continuing without music")
 
 func _apply_saved_settings() -> void:
 	if SaveManager == null:
@@ -51,9 +59,9 @@ func _process(_delta: float) -> void:
 	var master := SaveManager.get_sound_setting("master")
 	var sfx := SaveManager.get_sound_setting("sfx")
 	if _music:
-		var music_volume := 0.0 if muted else master*SaveManager.get_sound_setting("music")
+		var music_volume := 0.0 if muted or _game_paused else master*SaveManager.get_sound_setting("music")
 		_music.volume_db=linear_to_db(maxf(music_volume*0.6,0.00001))
-	var vol := 0.0 if muted or not _engine_enabled else 0.24 * master * sfx
+	var vol := 0.0 if muted or _game_paused or not _engine_enabled else 0.24 * master * sfx
 	for i in range(frames_available):
 		var sample := sin(_engine_phase * TAU) * vol
 		# add a bit of low harmonic buzz for an "engine" feel
@@ -66,6 +74,17 @@ func _process(_delta: float) -> void:
 
 func set_engine_running(running: bool) -> void:
 	_engine_enabled = running
+
+func set_game_paused(paused: bool) -> void:
+	_game_paused = paused
+	if _music:
+		if paused:
+			_music.volume_db = -80.0
+		else:
+			var muted := SaveManager != null and SaveManager.is_muted()
+			var master := 1.0 if SaveManager == null else SaveManager.get_sound_setting("master")
+			var music := 0.0 if muted else master*SaveManager.get_sound_setting("music")
+			_music.volume_db = linear_to_db(maxf(music*0.6,0.00001))
 
 func set_engine_rpm(speed_ratio: float) -> void:
 	# speed_ratio: 0..1

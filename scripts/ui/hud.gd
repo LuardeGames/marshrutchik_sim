@@ -29,6 +29,7 @@ var change_label: Label
 var settings: SettingsOverlay
 var _notification_tween: Tween
 var _change_pending := false
+var double_reward_button: Button
 
 func _ready() -> void:
 	layer = 10
@@ -62,6 +63,7 @@ func _ready() -> void:
 	EventBus.money_earned.connect(_on_money_earned)
 	EventBus.change_choice_requested.connect(_on_change_requested)
 	EventBus.trip_completed.connect(_on_trip_completed)
+	GameManager.double_reward_claimed.connect(_on_double_reward_claimed)
 	if route_manager:
 		route_manager.next_stop_changed.connect(_on_next_stop_changed)
 
@@ -179,7 +181,7 @@ func _build_route_bar(root: Control) -> void:
 	labels.alignment = BoxContainer.ALIGNMENT_CENTER
 	labels.add_theme_constant_override("separation", 2)
 	vbox.add_child(labels)
-	current_stop_label = UITheme.make_label("МАРШРУТ № 47", 14, UITheme.COLOR_TEXT_DIM)
+	current_stop_label = UITheme.make_label("МАРШРУТ № %s" % RouteDefinition.route_number(), 14, UITheme.COLOR_TEXT_DIM)
 	labels.add_child(current_stop_label)
 	next_stop_label = UITheme.make_label("Следующая: —", 20, UITheme.COLOR_ACCENT, true)
 	labels.add_child(next_stop_label)
@@ -204,7 +206,7 @@ func _on_next_stop_changed(stop: StopArea) -> void:
 		dot.color = UITheme.COLOR_ACCENT if i < stop.stop_id else (UITheme.COLOR_ACCENT_2 if i == stop.stop_id else UITheme.COLOR_TEXT_DIM)
 	if stop.stop_id > 0:
 		var stops := RouteDefinition.stops()
-		current_stop_label.text = "МАРШРУТ № 47  ·  ОСТАНОВКА %d / 6" % (stop.stop_id+1)
+		current_stop_label.text = "МАРШРУТ № %s  ·  ОСТАНОВКА %d / %d" % [RouteDefinition.route_number(), stop.stop_id+1, route_manager.stops.size()]
 
 # ---------------------------------------------------------------------------
 # Notifications
@@ -378,8 +380,24 @@ func _on_trip_completed(summary: Dictionary) -> void:
 	vbox.add_child(UITheme.make_label("Остановки и время: %d ₽" % summary.get("stop_bonus", 0), 18, UITheme.COLOR_GOOD))
 	vbox.add_child(UITheme.make_label("Бонус за комфорт: %d ₽" % summary.comfort_bonus, 18, UITheme.COLOR_GOOD))
 	vbox.add_child(UITheme.make_label("Штрафы: -%d ₽" % summary.penalties, 18, UITheme.COLOR_BAD))
+	vbox.add_child(UITheme.make_label("Состояние машины: %d%% · столкновений: %d" % [int(round(summary.get("vehicle_condition",100.0))), int(summary.get("collisions",0))], 16, UITheme.COLOR_TEXT_DIM))
+	if int(summary.get("daily_bonus", 0)) > 0:
+		vbox.add_child(UITheme.make_label("Рейс дня «%s»: +%d ₽" % [summary.get("daily_title", ""), int(summary.daily_bonus)], 16, UITheme.COLOR_ACCENT_2))
 	vbox.add_child(UITheme.make_label("Время: %s" % GameManager.format_time(summary.time), 18))
 	vbox.add_child(UITheme.make_label("Итог: %d ₽" % summary.total, 24, UITheme.COLOR_ACCENT, true))
+
+	double_reward_button = Button.new()
+	double_reward_button.text = "Посмотреть рекламу · ×2 итог"
+	double_reward_button.disabled = int(summary.total) <= 0
+	UITheme.style_button(double_reward_button, UITheme.COLOR_ACCENT_2, Color(0.05, 0.05, 0.05), 16)
+	double_reward_button.custom_minimum_size = Vector2(0, 48)
+	vbox.add_child(double_reward_button)
+	double_reward_button.pressed.connect(func():
+		double_reward_button.disabled = true
+		double_reward_button.text = "Загрузка рекламы…"
+		if not GameManager.claim_double_reward():
+			double_reward_button.disabled = false
+			double_reward_button.text = "Посмотреть рекламу · ×2 итог")
 
 	var milestone := "Маршрут освоен! ПАЗ, три звезды — вы свой в этом городе." if summary.get("mastered_now",false) else ("Следующая цель: рейс на ПАЗике на 3 звезды" if SaveManager.is_vehicle_unlocked("modern_microbus") else "До ПАЗика осталось %d ₽" % maxi(0,2500-SaveManager.get_money()))
 	var goal:=UITheme.make_label(milestone,16,UITheme.COLOR_TEXT_DIM)
@@ -415,6 +433,13 @@ func _on_trip_completed(summary: Dictionary) -> void:
 	result_layer.modulate.a = 0.0
 	var tw := create_tween()
 	tw.tween_property(result_layer, "modulate:a", 1.0, 0.35)
+
+func _on_double_reward_claimed(amount: int) -> void:
+	if double_reward_button == null:
+		return
+	double_reward_button.disabled = true
+	double_reward_button.text = "Реклама просмотрена · +%d ₽" % amount
+
 
 func _build_pause(root: Control) -> void:
 	pause_layer = Control.new()
@@ -460,8 +485,13 @@ func _build_pause(root: Control) -> void:
 func _set_paused(value: bool) -> void:
 	InputState.reset_touch()
 	pause_layer.visible=value
+	AudioManager.set_game_paused(value)
 	get_tree().paused=value
 	AudioManager.set_engine_running(not value)
+	if value:
+		PlatformService.stop_gameplay()
+	else:
+		PlatformService.start_gameplay()
 
 func _recover_vehicle() -> void:
 	if not vehicle:
