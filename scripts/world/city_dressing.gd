@@ -207,17 +207,17 @@ static func _build_parks_and_courtyards(root: Node3D, waypoints: Array[Vector3])
 		park.position = center
 		park.rotation.y = atan2(dir.x, dir.z)
 		root.add_child(park)
-		WorldBuilder._box(park, Vector3(0, 0.04, 0), Vector3(18.0, 0.08, 30.0), BusVisual.material(Color("5e744e")), false)
-		WorldBuilder._box(park, Vector3(0, 0.075, 0), Vector3(2.0, 0.035, 28.0), BusVisual.material(Color("b0a27f")), false)
+		WorldBuilder._box(park, Vector3(0, 0.04, 0), Vector3(18.0, 0.08, 30.0), Color("5e744e"), false)
+		WorldBuilder._box(park, Vector3(0, 0.075, 0), Vector3(2.0, 0.035, 28.0), Color("b0a27f"), false)
 		for x in [-6.0, 6.0]:
 			for z in [-10.0, 0.0, 10.0]:
 				var tree_pos := Vector3(x, 0, z)
-				WorldBuilder._box(park, tree_pos + Vector3(0, 0.8, 0), Vector3(0.65, 1.6, 0.65), BusVisual.material(Color("76533e")), false)
+				WorldBuilder._box(park, tree_pos + Vector3(0, 0.8, 0), Vector3(0.65, 1.6, 0.65), Color("76533e"), false)
 				_shrub(park, tree_pos + Vector3(0, 2.25, 0), Color("4b704d"), 1.45)
 				WorldBuilder._invisible_collider(park, tree_pos + Vector3(0, 1.2, 0), Vector3(1.1, 2.4, 1.1))
-		WorldBuilder._box(park, Vector3(-5.0, 0.55, 4.0), Vector3(3.0, 0.12, 0.55), BusVisual.material(Color("735442")), false)
-		WorldBuilder._box(park, Vector3(-5.0, 0.30, 4.0), Vector3(0.10, 0.6, 0.5), BusVisual.material(Color("596461")), false)
-		WorldBuilder._box(park, Vector3(-3.8, 0.30, 4.0), Vector3(0.10, 0.6, 0.5), BusVisual.material(Color("596461")), false)
+		WorldBuilder._box(park, Vector3(-5.0, 0.55, 4.0), Vector3(3.0, 0.12, 0.55), Color("735442"), false)
+		WorldBuilder._box(park, Vector3(-5.0, 0.30, 4.0), Vector3(0.10, 0.6, 0.5), Color("596461"), false)
+		WorldBuilder._box(park, Vector3(-3.8, 0.30, 4.0), Vector3(0.10, 0.6, 0.5), Color("596461"), false)
 		park_index += 1
 
 static func _build_chain_stores(root: Node3D) -> void:
@@ -238,10 +238,10 @@ static func _chain_store(root: Node3D, pos: Vector3, store_name: String, color: 
 	store.name = "ChainStore_" + store_name
 	store.position = pos
 	root.add_child(store)
-	WorldBuilder._box(store, Vector3(0, 2.0, 0), Vector3(9.0, 4.0, 7.0), BusVisual.material(Color("c1b89f")))
+	WorldBuilder._box(store, Vector3(0, 2.0, 0), Vector3(9.0, 4.0, 7.0), Color("c1b89f"))
 	WorldBuilder._invisible_collider(store, Vector3(0, 2.0, 0), Vector3(9.0, 4.0, 7.0))
-	WorldBuilder._box(store, Vector3(0, 3.65, -3.65), Vector3(9.4, 0.8, 0.18), BusVisual.material(color), false)
-	WorldBuilder._box(store, Vector3(0, 1.7, -3.63), Vector3(7.2, 1.7, 0.08), BusVisual.material(Color("42606a")), false)
+	WorldBuilder._box(store, Vector3(0, 3.65, -3.65), Vector3(9.4, 0.8, 0.18), color, false)
+	WorldBuilder._box(store, Vector3(0, 1.7, -3.63), Vector3(7.2, 1.7, 0.08), Color("42606a"), false)
 	_sign(store, store_name, Vector3(0, 3.65, -3.78), 0.005)
 
 static func _build_neighborhood_life(root: Node3D, waypoints: Array[Vector3]) -> void:
@@ -260,23 +260,23 @@ static func _build_neighborhood_life(root: Node3D, waypoints: Array[Vector3]) ->
 		yard.position = center
 		yard.rotation.y = atan2(dir.x, dir.z)
 		root.add_child(yard)
-		WorldBuilder._box(yard, Vector3(0, 0.035, 0), Vector3(24.0, 0.07, 20.0), BusVisual.material(Color("536442")), false)
-		WorldBuilder._box(yard, Vector3(0, 0.075, 0), Vector3(1.8, 0.035, 19.0), BusVisual.material(Color("a79b79")), false)
+		WorldBuilder._box(yard, Vector3(0, 0.035, 0), Vector3(24.0, 0.07, 20.0), Color("536442"), false)
+		WorldBuilder._box(yard, Vector3(0, 0.075, 0), Vector3(1.8, 0.035, 19.0), Color("a79b79"), false)
 		for x in [-8.0, -2.7, 2.7, 8.0]:
-			WorldBuilder._box(yard, Vector3(x, 1.35, -7.2), Vector3(4.5, 2.7, 4.0), BusVisual.material(Color("77706a")))
-			WorldBuilder._box(yard, Vector3(x, 2.80, -7.2), Vector3(4.8, 0.25, 4.3), BusVisual.material(Color("4d5553")), false)
+			WorldBuilder._box(yard, Vector3(x, 1.35, -7.2), Vector3(4.5, 2.7, 4.0), Color("77706a"))
+			WorldBuilder._box(yard, Vector3(x, 2.80, -7.2), Vector3(4.8, 0.25, 4.3), Color("4d5553"), false)
 		for car_index in range(3):
 			_parked_car(yard, Vector3(-8.0 + float(car_index) * 5.2, 0, 5.4), dir, colors[(i + car_index) % colors.size()])
 		# A small Soviet-style playground gives empty courtyards a readable use.
-		WorldBuilder._box(yard, Vector3(5.2, 0.20, -0.8), Vector3(4.5, 0.4, 3.8), BusVisual.material(Color("b99b62")), false)
-		WorldBuilder._box(yard, Vector3(3.4, 1.15, -1.8), Vector3(0.14, 2.3, 0.14), BusVisual.material(Color("b24c3e")), false)
-		WorldBuilder._box(yard, Vector3(5.2, 1.15, -1.8), Vector3(0.14, 2.3, 0.14), BusVisual.material(Color("b24c3e")), false)
-		WorldBuilder._box(yard, Vector3(4.3, 2.05, -1.8), Vector3(1.2, 0.10, 0.10), BusVisual.material(Color("d0b25c")), false)
-		WorldBuilder._box(yard, Vector3(-7.0, 1.0, -0.8), Vector3(0.10, 2.0, 0.10), BusVisual.material(Color("596461")), false)
-		WorldBuilder._box(yard, Vector3(-3.0, 1.0, -0.8), Vector3(0.10, 2.0, 0.10), BusVisual.material(Color("596461")), false)
-		WorldBuilder._box(yard, Vector3(-5.0, 1.6, -0.8), Vector3(4.0, 0.08, 0.08), BusVisual.material(Color("596461")), false)
-		WorldBuilder._box(yard, Vector3(-8.0, 0.45, 0.5), Vector3(0.75, 0.9, 0.75), BusVisual.material(Color("596461")))
-		WorldBuilder._box(yard, Vector3(-6.8, 0.45, 0.5), Vector3(0.75, 0.9, 0.75), BusVisual.material(Color("596461")))
+		WorldBuilder._box(yard, Vector3(5.2, 0.20, -0.8), Vector3(4.5, 0.4, 3.8), Color("b99b62"), false)
+		WorldBuilder._box(yard, Vector3(3.4, 1.15, -1.8), Vector3(0.14, 2.3, 0.14), Color("b24c3e"), false)
+		WorldBuilder._box(yard, Vector3(5.2, 1.15, -1.8), Vector3(0.14, 2.3, 0.14), Color("b24c3e"), false)
+		WorldBuilder._box(yard, Vector3(4.3, 2.05, -1.8), Vector3(1.2, 0.10, 0.10), Color("d0b25c"), false)
+		WorldBuilder._box(yard, Vector3(-7.0, 1.0, -0.8), Vector3(0.10, 2.0, 0.10), Color("596461"), false)
+		WorldBuilder._box(yard, Vector3(-3.0, 1.0, -0.8), Vector3(0.10, 2.0, 0.10), Color("596461"), false)
+		WorldBuilder._box(yard, Vector3(-5.0, 1.6, -0.8), Vector3(4.0, 0.08, 0.08), Color("596461"), false)
+		WorldBuilder._box(yard, Vector3(-8.0, 0.45, 0.5), Vector3(0.75, 0.9, 0.75), Color("596461"))
+		WorldBuilder._box(yard, Vector3(-6.8, 0.45, 0.5), Vector3(0.75, 0.9, 0.75), Color("596461"))
 		for x in [-9.0, 9.0]:
 			_shrub(yard, Vector3(x, 1.3, 6.8), Color("4f704d"), 1.25)
 			WorldBuilder._invisible_collider(yard, Vector3(x, 1.1, 6.8), Vector3(1.0, 2.2, 1.0))
