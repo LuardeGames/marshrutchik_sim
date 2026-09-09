@@ -79,15 +79,16 @@ static func _build_ambient_life(parent: Node3D, waypoints: Array[Vector3]) -> vo
 	rng.seed = 55129
 	var parked_colors := [Color("536a72"), Color("8b5148"), Color("b18d53"), Color("65745b")]
 	for i in range(waypoints.size()):
-		var a := waypoints[i]
-		var b := waypoints[(i + 1) % waypoints.size()]
-		var dir := (b - a).normalized()
-		var side := Vector3(-dir.z, 0, dir.x)
-		var length := a.distance_to(b)
-		for side_sign in [-1.0, 1.0]:
+		var a: Vector3 = waypoints[i]
+		var b: Vector3 = waypoints[(i + 1) % waypoints.size()]
+		var dir: Vector3 = (b - a).normalized()
+		var side: Vector3 = Vector3(-dir.z, 0, dir.x)
+		var length: float = a.distance_to(b)
+		var side_signs: Array[float] = [-1.0, 1.0]
+		for side_sign: float in side_signs:
 			var t := 0.24 + float((i + int(side_sign > 0.0)) % 3) * 0.17
-			var start := a.lerp(b, t) + side * side_sign * (RouteDefinition.ROAD_WIDTH * 0.5 + 3.0)
-			var finish := a.lerp(b, minf(t + 0.22, 0.90)) + side * side_sign * (RouteDefinition.ROAD_WIDTH * 0.5 + 3.0)
+			var start: Vector3 = a.lerp(b, t) + side * side_sign * (RouteDefinition.ROAD_WIDTH * 0.5 + 3.0)
+			var finish: Vector3 = a.lerp(b, minf(t + 0.22, 0.90)) + side * side_sign * (RouteDefinition.ROAD_WIDTH * 0.5 + 3.0)
 			if _near_stop(start) or start.distance_to(finish) < 8.0:
 				continue
 			var pedestrian := AmbientPedestrian.new()
@@ -97,7 +98,7 @@ static func _build_ambient_life(parent: Node3D, waypoints: Array[Vector3]) -> vo
 			pedestrian.walk_speed = rng.randf_range(0.8, 1.25)
 			parent.add_child(pedestrian)
 		if length > 110.0 and i % 2 == 0:
-			var parked_pos := a.lerp(b, 0.67) + side * (RouteDefinition.ROAD_WIDTH * 0.5 + 2.7)
+			var parked_pos: Vector3 = a.lerp(b, 0.67) + side * (RouteDefinition.ROAD_WIDTH * 0.5 + 2.7)
 			if not _near_stop(parked_pos):
 				_parked_car(parent, parked_pos, dir, parked_colors[i % parked_colors.size()])
 

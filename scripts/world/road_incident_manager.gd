@@ -44,16 +44,16 @@ func _spawn_incident() -> void:
 	if points.size() < 4:
 		return
 	var nearest_segment := _nearest_segment(vehicle.global_position, points)
-	var segment := (nearest_segment + randi_range(1, 3)) % points.size()
+	var segment: int = (nearest_segment + randi_range(1, 3)) % points.size()
 	var a: Vector3 = points[segment]
 	var b: Vector3 = points[(segment + 1) % points.size()]
-	var dir := (b - a).normalized()
-	var side := Vector3(-dir.z, 0, dir.x) * ([-1.0, 1.0].pick_random() * 2.5)
-	var position := a.lerp(b, randf_range(0.35, 0.72)) + side
+	var dir: Vector3 = (b - a).normalized()
+	var side: Vector3 = Vector3(-dir.z, 0, dir.x) * ([-1.0, 1.0].pick_random() * 2.5)
+	var position: Vector3 = a.lerp(b, randf_range(0.35, 0.72)) + side
 	if _too_close_to_stop(position) or position.distance_to(vehicle.global_position) < 35.0:
 		return
-	var kind := ["parked_car", "roadworks", "debris"].pick_random()
-	var node := _build_incident(kind, position, dir)
+	var kind: String = ["parked_car", "roadworks", "debris"].pick_random()
+	var node: Node3D = _build_incident(kind, position, dir)
 	if node == null:
 		return
 	node.name = "RoadIncident_%d" % _incident_index
