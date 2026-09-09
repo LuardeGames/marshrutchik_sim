@@ -18,6 +18,7 @@ var passengers_delivered: int = 0
 var collisions: int = 0
 var missed_required_stops: int = 0
 var trip_running: bool = false
+var daily_challenge: Dictionary = {}
 
 func _ready() -> void:
 	PlatformService.init()
@@ -32,6 +33,7 @@ func start_trip() -> void:
 	collisions = 0
 	missed_required_stops = 0
 	trip_running = true
+	daily_challenge = DailyChallenge.today()
 	EconomyManager.reset_trip()
 	state = State.DRIVING
 	get_tree().change_scene_to_file(GAMEPLAY_SCENE)
@@ -60,7 +62,10 @@ func modify_comfort(delta: float) -> void:
 
 func register_collision(strength: float) -> void:
 	collisions += 1
+	var damage: float = clampf(strength * 16.0, 3.0, 18.0)
+	SaveManager.damage_vehicle(damage)
 	modify_comfort(-clamp(strength * 12.0, 3.0, 25.0))
+	EventBus.notification.emit("Удар! Состояние машины: %d%%" % int(round(SaveManager.get_vehicle_condition())), 2.0)
 	EventBus.vehicle_collision.emit(strength)
 	AudioManager.play_collision(strength)
 
@@ -91,6 +96,11 @@ func complete_trip() -> Dictionary:
 		EconomyManager.add_stop_bonus(speed_bonus)
 	if missed_required_stops > 0:
 		EconomyManager.add_penalty(missed_required_stops * 30)
+	var daily_bonus := 0
+	if DailyChallenge.is_completed(daily_challenge, comfort):
+		daily_bonus = int(daily_challenge.get("bonus", 0))
+		if daily_bonus > 0:
+			EconomyManager.add_stop_bonus(daily_bonus)
 
 	var total := EconomyManager.get_trip_total()
 	var rating := _compute_rating(total)
@@ -112,6 +122,10 @@ func complete_trip() -> Dictionary:
 		"total": total,
 		"rating": rating,
 		"comfort": comfort,
+		"vehicle_condition": SaveManager.get_vehicle_condition(),
+		"collisions": collisions,
+		"daily_title": String(daily_challenge.get("title", "")),
+		"daily_bonus": daily_bonus,
 	}
 	_last_summary = summary.duplicate(true)
 	state = State.RESULTS

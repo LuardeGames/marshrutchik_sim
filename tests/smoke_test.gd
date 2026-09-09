@@ -54,9 +54,24 @@ func _run() -> void:
 	for u in EconomyManager.upgrades:
 		_check("upgrade '%s' has >= 3 levels" % u.id, u.max_level >= 3)
 
+	# --- repair loop ---
+	SaveManager.data["vehicle_condition"] = 70.0
+	SaveManager.data["money"] = 100000
+	var repair_cost: int = SaveManager.get_repair_cost()
+	_check("damaged vehicle has repair cost", repair_cost > 0)
+	_check("repair restores condition", SaveManager.repair_vehicle() and is_equal_approx(SaveManager.get_vehicle_condition(), 100.0))
+
 	# --- vehicle catalog ---
 	var vehicles := VehicleCatalog.build()
 	_check("at least 2 vehicles available", vehicles.size() >= 2)
+	_check("passenger catalog has 7 release archetypes", PassengerCatalog.build().size() >= 7)
+	var daily := DailyChallenge.today()
+	_check("daily challenge has player-facing text", not String(daily.get("title", "")).is_empty() and not String(daily.get("description", "")).is_empty())
+
+	# Fresh-import regression: menu dependencies must resolve directly instead
+	# of relying on a warmed global-class cache.
+	var menu_scene: PackedScene = load("res://scenes/main_menu/main_menu.tscn")
+	_check("main menu scene loads", menu_scene != null)
 
 	# --- gameplay scene loads and builds world ---
 	var gameplay_scene: PackedScene = load("res://scenes/gameplay/gameplay.tscn")

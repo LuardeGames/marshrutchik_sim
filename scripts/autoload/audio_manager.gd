@@ -29,13 +29,20 @@ func _ready() -> void:
 	_engine_playback = _engine_player.get_stream_playback()
 	set_process(true)
 	_apply_saved_settings()
-	_music=AudioStreamPlayer.new()
-	var track: AudioStreamWAV=load("res://assets/audio/radio_evening.wav").duplicate()
-	track.loop_mode=AudioStreamWAV.LOOP_FORWARD
-	track.loop_end=track.data.size()/2
-	_music.stream=track
-	add_child(_music)
-	_music.play()
+	# A new checkout may briefly start before the editor has generated the WAV
+	# import cache. Music is optional, so never let that turn into a startup
+	# crash; it starts normally as soon as the resource is available.
+	var loaded_track := load("res://assets/audio/radio_evening.wav")
+	if loaded_track is AudioStreamWAV:
+		_music=AudioStreamPlayer.new()
+		var track: AudioStreamWAV=(loaded_track as AudioStreamWAV).duplicate()
+		track.loop_mode=AudioStreamWAV.LOOP_FORWARD
+		track.loop_end=track.data.size()/2
+		_music.stream=track
+		add_child(_music)
+		_music.play()
+	else:
+		push_warning("AudioManager: radio track is unavailable; continuing without music")
 
 func _apply_saved_settings() -> void:
 	if SaveManager == null:

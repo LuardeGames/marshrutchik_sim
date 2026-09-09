@@ -63,8 +63,11 @@ func _ready() -> void:
 func _apply_definition() -> void:
 	var engine_mult := EconomyManager.get_upgrade_multiplier("engine")
 	var brake_mult := EconomyManager.get_upgrade_multiplier("brakes")
-	max_speed = definition.base_max_speed * engine_mult
-	acceleration = definition.base_acceleration * engine_mult
+	# Damage gently affects the way the bus feels without making a single
+	# collision a softlock. Repairs in the garage restore the full values.
+	var condition_mult := lerpf(0.72, 1.0, SaveManager.get_vehicle_condition() / 100.0)
+	max_speed = definition.base_max_speed * engine_mult * condition_mult
+	acceleration = definition.base_acceleration * engine_mult * condition_mult
 	brake_force = definition.base_brake_force * brake_mult
 	capacity = definition.base_capacity + EconomyManager.get_extra_capacity()
 

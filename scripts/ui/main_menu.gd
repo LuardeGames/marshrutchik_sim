@@ -1,7 +1,12 @@
 extends Control
 ## Main menu: title, navigation, money/best-rating readout, settings modal.
 
-var settings_panel: SettingsOverlay
+## Explicit preloads keep the menu bootable even while Godot is rebuilding
+## its global class cache after a fresh clone/import.
+const SettingsOverlayScript := preload("res://scripts/ui/settings_overlay.gd")
+const MenuBackdropScript := preload("res://scripts/ui/menu_backdrop.gd")
+
+var settings_panel: Control
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -11,7 +16,7 @@ func _ready() -> void:
 	AudioManager.set_engine_running(false)
 
 func _build_background() -> void:
-	add_child(MenuBackdrop.new())
+	add_child(MenuBackdropScript.new())
 	var shade := ColorRect.new()
 	shade.color = Color(0.03,0.05,0.07,0.82)
 	shade.set_anchors_preset(Control.PRESET_LEFT_WIDE)
@@ -37,6 +42,11 @@ func _build_content() -> void:
 	var goal := UITheme.make_label("Маршрут освоен! Улучшайте рекорд." if mastered else "Цель: купить ПАЗ и пройти на нём на 3 звезды",14,UITheme.COLOR_TEXT_DIM)
 	goal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(goal)
+	var daily := DailyChallenge.today()
+	var daily_label := UITheme.make_label("РЕЙС ДНЯ · %s\n%s" % [daily.title, daily.description], 14, UITheme.COLOR_ACCENT_2, true)
+	daily_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	daily_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(daily_label)
 
 	var stats_panel := PanelContainer.new()
 	stats_panel.add_theme_stylebox_override("panel", UITheme.panel_style())
@@ -67,5 +77,5 @@ func _menu_button(text: String, color: Color, action: Callable) -> Button:
 	return btn
 
 func _build_settings_modal() -> void:
-	settings_panel=SettingsOverlay.new()
+	settings_panel=SettingsOverlayScript.new()
 	add_child(settings_panel)

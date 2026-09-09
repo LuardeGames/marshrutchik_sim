@@ -378,6 +378,9 @@ func _on_trip_completed(summary: Dictionary) -> void:
 	vbox.add_child(UITheme.make_label("Остановки и время: %d ₽" % summary.get("stop_bonus", 0), 18, UITheme.COLOR_GOOD))
 	vbox.add_child(UITheme.make_label("Бонус за комфорт: %d ₽" % summary.comfort_bonus, 18, UITheme.COLOR_GOOD))
 	vbox.add_child(UITheme.make_label("Штрафы: -%d ₽" % summary.penalties, 18, UITheme.COLOR_BAD))
+	vbox.add_child(UITheme.make_label("Состояние машины: %d%% · столкновений: %d" % [int(round(summary.get("vehicle_condition",100.0))), int(summary.get("collisions",0))], 16, UITheme.COLOR_TEXT_DIM))
+	if int(summary.get("daily_bonus", 0)) > 0:
+		vbox.add_child(UITheme.make_label("Рейс дня «%s»: +%d ₽" % [summary.get("daily_title", ""), int(summary.daily_bonus)], 16, UITheme.COLOR_ACCENT_2))
 	vbox.add_child(UITheme.make_label("Время: %s" % GameManager.format_time(summary.time), 18))
 	vbox.add_child(UITheme.make_label("Итог: %d ₽" % summary.total, 24, UITheme.COLOR_ACCENT, true))
 

@@ -5,6 +5,8 @@ extends Control
 var money_label: Label
 var upgrades_box: VBoxContainer
 var vehicles_box: HBoxContainer
+var condition_label: Label
+var repair_button: Button
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -38,6 +40,22 @@ func _build_header() -> void:
 	money_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	money_label.position = Vector2(-390, 22)
 	add_child(money_label)
+	condition_label = UITheme.make_label("", 16, UITheme.COLOR_TEXT_DIM)
+	condition_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	condition_label.position = Vector2(-390, 53)
+	add_child(condition_label)
+	repair_button = Button.new()
+	repair_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	repair_button.position = Vector2(-195, 60)
+	repair_button.custom_minimum_size = Vector2(170, 38)
+	UITheme.style_button(repair_button, UITheme.COLOR_ACCENT, Color(0.05, 0.05, 0.05), 14)
+	add_child(repair_button)
+	repair_button.pressed.connect(func():
+		if SaveManager.repair_vehicle():
+			AudioManager.play_money()
+			_refresh_money()
+			_refresh_vehicles())
+	_refresh_condition()
 	var drive:=Button.new()
 	drive.text="На линию →"
 	UITheme.style_button(drive,UITheme.COLOR_GOOD,Color.BLACK,18)
@@ -49,6 +67,17 @@ func _build_header() -> void:
 
 func _refresh_money() -> void:
 	money_label.text = "%d ₽" % SaveManager.get_money()
+	_refresh_condition()
+
+func _refresh_condition() -> void:
+	if condition_label == null or repair_button == null:
+		return
+	var condition := SaveManager.get_vehicle_condition()
+	condition_label.text = "Состояние: %d%%" % int(round(condition))
+	condition_label.modulate = UITheme.COLOR_GOOD if condition >= 70.0 else (UITheme.COLOR_ACCENT if condition >= 40.0 else UITheme.COLOR_BAD)
+	var cost := SaveManager.get_repair_cost()
+	repair_button.text = "Исправна" if cost <= 0 else "Ремонт: %d ₽" % cost
+	repair_button.disabled = cost <= 0 or SaveManager.get_money() < cost
 
 func _build_vehicles() -> void:
 	var panel := PanelContainer.new()

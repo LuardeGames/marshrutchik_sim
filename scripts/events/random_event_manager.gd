@@ -7,6 +7,8 @@ var events: Array[GameEvent] = []
 var _flavor_timer: float = 0.0
 var _change_timer: float = 0.0
 var active: bool = false
+var triggered_count := 0
+const MAX_EVENTS_PER_TRIP := 3
 
 func _ready() -> void:
 	events = EventCatalog.build()
@@ -15,6 +17,7 @@ func _ready() -> void:
 
 func start() -> void:
 	active = true
+	triggered_count = 0
 
 func stop() -> void:
 	active = false
@@ -23,12 +26,14 @@ func _process(delta: float) -> void:
 	if not active or not GameManager.trip_running:
 		return
 	_flavor_timer -= delta
-	if _flavor_timer <= 0.0:
+	if _flavor_timer <= 0.0 and triggered_count < MAX_EVENTS_PER_TRIP:
 		_trigger_flavor_event()
+		triggered_count += 1
 		_reset_flavor_timer()
 	_change_timer -= delta
-	if _change_timer <= 0.0:
+	if _change_timer <= 0.0 and triggered_count < MAX_EVENTS_PER_TRIP:
 		_trigger_change_event()
+		triggered_count += 1
 		_reset_change_timer()
 
 func _reset_flavor_timer() -> void:

@@ -8,3 +8,5 @@ class_name PassengerArchetype
 @export var fare_variance: int = 15
 @export var patience: float = 1.0 # multiplier, higher = more tolerant
 @export var tip_chance: float = 0.15
+@export var boarding_lines: PackedStringArray = []
+@export var jolt_lines: PackedStringArray = []

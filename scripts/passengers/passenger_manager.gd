@@ -24,6 +24,7 @@ var aboard: Array[Dictionary] = []
 var _processed_stop: StopArea = null
 var boarding_pending: int = 0
 var _boost_boarding_speed: float = 1.0
+var _last_dialogue_time := -100.0
 
 func setup(vehicle_ref: VehicleController, route_mgr: RouteManager, parent: Node3D, stops_order: Array[int]) -> void:
 	vehicle = vehicle_ref
@@ -43,11 +44,12 @@ func _generate_waiting(stop_id: int) -> void:
 		return # nobody waits to board at the final terminus
 	var stop: StopArea = _stops_by_id.get(stop_id)
 	var list: Array = waiting.get(stop_id, [])
-	var count := randi_range(4, 8)
+	var multiplier: float = float(GameManager.daily_challenge.get("passenger_multiplier", 1.0))
+	var count: int = clampi(int(round(float(randi_range(4, 8)) * multiplier)), 3, 12)
 	for i in range(count):
 		var archetype := PassengerCatalog.random_archetype()
 		var dest := _pick_destination(stop_id)
-		var fare := archetype.base_fare + randi_range(-archetype.fare_variance, archetype.fare_variance)
+		var fare: int = int(round(float(archetype.base_fare + randi_range(-archetype.fare_variance, archetype.fare_variance)) * float(GameManager.daily_challenge.get("fare_multiplier", 1.0))))
 		var node := _spawn_standing_passenger(stop, archetype, i, count)
 		list.append({"archetype": archetype, "fare": fare, "destination_stop_id": dest, "node": node})
 	waiting[stop_id] = list
@@ -151,6 +153,7 @@ func _board_passengers(stop: StopArea) -> void:
 ## over to the door and pays their fare on arrival - no new node created,
 ## it's the same NPC the player saw waiting.
 func _send_passenger_to_board(entry: Dictionary) -> void:
+	_say(entry.get("archetype"), "boarding_lines")
 	var p: Passenger = entry.get("node")
 	if p == null or not is_instance_valid(p):
 		# NPC got cleaned up some other way - still honor the boarding so
@@ -225,3 +228,14 @@ func jolt_passengers() -> void:
 	for c in world_parent.get_children():
 		if c is Passenger:
 			c.react_to_jolt()
+	if not aboard.is_empty():
+		_say((aboard[randi() % aboard.size()] as Dictionary).get("archetype"), "jolt_lines")
+
+func _say(archetype: PassengerArchetype, field: String) -> void:
+	if archetype == null or GameManager.trip_time - _last_dialogue_time < 7.0:
+		return
+	var lines: PackedStringArray = archetype.boarding_lines if field == "boarding_lines" else archetype.jolt_lines
+	if lines.is_empty():
+		return
+	_last_dialogue_time = GameManager.trip_time
+	EventBus.notification.emit("%s — %s" % [lines[randi() % lines.size()], archetype.display_name], 2.6)
