@@ -240,15 +240,23 @@ static func _build_traffic_lights(parent: Node3D, waypoints: Array[Vector3]) -> 
 static func _build_traffic_dummies(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	var outer: Array[Vector3] = [Vector3(-140,0,-600),Vector3(760,0,-600),Vector3(760,0,280),Vector3(-140,0,280)]
 	for circuit in [waypoints,outer]:
-		var count := 16 if circuit==waypoints else 10
+		var is_route: bool = circuit == waypoints
+		var count: int = 20 if is_route else 12
 		for reverse in [false,true]:
 			for index in range(count):
 				var car := TrafficDummy.new()
-				car.name = "Oncoming_%s_%s_%d" % ["Route" if circuit==waypoints else "Outer",reverse,index]
+				car.name = "Oncoming_%s_%s_%d" % ["Route" if is_route else "Outer",reverse,index]
 				car.road_path.assign(circuit)
 				car.reverse_direction = reverse
 				car.start_index = index
-				car.spawn_fraction = (float(index)+0.35)/float(count)
+				# Four-car waves create queues at red lights while still leaving
+				# gaps for the player to merge and overtake on wider sections.
+				if is_route:
+					var wave: int = index / 4
+					var slot: int = index % 4
+					car.spawn_fraction = fposmod(0.04 + float(wave) * 0.235 + float(slot) * 0.018, 1.0)
+				else:
+					car.spawn_fraction = (float(index)+0.35)/float(count)
 				car.speed = 7.5+float(index%4)*0.7
 				parent.add_child(car)
 
@@ -596,6 +604,7 @@ static func _build_trees(parent: Node3D, waypoints: Array[Vector3]) -> void:
 		if child is TrafficLightProp or child.name.begins_with("Sign_"):
 			signs.append(child.position)
 	var transforms: Array[Transform3D] = []
+	var solid_positions: Array[Vector3] = []
 	var n := waypoints.size()
 	for i in range(n):
 		var a: Vector3 = waypoints[i]
@@ -608,7 +617,7 @@ static func _build_trees(parent: Node3D, waypoints: Array[Vector3]) -> void:
 			var base_pos: Vector3 = a.lerp(b, t)
 			var sides: Array[float] = [-1.0, 1.0]
 			for side in sides:
-				if rng.randf() > 0.45:
+				if rng.randf() > 0.22:
 					continue
 				var dist: float = rng.randf_range(7.0, 12.0)
 				var pos: Vector3 = base_pos + perp * side * dist
@@ -619,6 +628,7 @@ static func _build_trees(parent: Node3D, waypoints: Array[Vector3]) -> void:
 						break
 				if not hides_sign and _clear_of_road(pos, Vector3(1,1,1), waypoints):
 					transforms.append(Transform3D(Basis(), pos + Vector3(0, 0.8, 0)))
+					solid_positions.append(pos + Vector3(0, 1.15, 0))
 
 	multimesh.instance_count = transforms.size()
 	for i in range(transforms.size()):
@@ -653,6 +663,12 @@ static func _build_trees(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	foliage_mat.roughness = 1.0
 	foliage_inst.material_override = foliage_mat
 	parent.add_child(foliage_inst)
+
+	# MultiMesh trees have no per-instance collision. Add cheap primitive
+	# trunks so the player cannot cut through the new greenery or use it as a
+	# shortcut around the road rules.
+	for solid_pos in solid_positions:
+		_invisible_collider(parent, solid_pos, Vector3(1.15, 2.3, 1.15))
 
 static func _clear_of_road(pos: Vector3, size: Vector3, waypoints: Array[Vector3]) -> bool:
 	for def in RouteDefinition.stops():

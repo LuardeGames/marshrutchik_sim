@@ -73,7 +73,7 @@ func _apply_definition() -> void:
 	capacity = definition.base_capacity + EconomyManager.get_extra_capacity()
 
 func _physics_process(delta: float) -> void:
-	if GameManager.state == GameManager.State.RESULTS:
+	if GameManager.state == GameManager.State.RESULTS or GameManager.state == GameManager.State.FAILED:
 		speed = 0.0
 		AudioManager.set_engine_running(false)
 		return

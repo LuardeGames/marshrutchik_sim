@@ -24,7 +24,7 @@ func setup(wps: Array[Vector3], stop_map: Dictionary, pm: PassengerManager) -> v
 	_build_visual()
 
 func _process(delta: float) -> void:
-	if waypoints.is_empty() or GameManager.state == GameManager.State.RESULTS:
+	if waypoints.is_empty() or GameManager.state != GameManager.State.DRIVING:
 		return
 	var target: Vector3 = _lane_point(_current_index)
 	var to_target := target - global_position

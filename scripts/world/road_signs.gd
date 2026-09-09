@@ -31,6 +31,24 @@ static func _make(parent: Node3D, pos: Vector3, forward: Vector3, kind: String) 
 	root.position=pos
 	root.look_at(pos+forward)
 	BusVisual.box(root,Vector3(0,1.35,0),Vector3(0.065,2.7,0.065),BusVisual.material(Color("737b80")))
+	# The visual post is a MeshInstance only, so give every sign a real
+	# obstacle as well. The plate is included to prevent clipping through
+	# signs when the bus is pushed sideways by a collision.
+	var post_body := StaticBody3D.new()
+	post_body.collision_layer = 1
+	var post_shape := CollisionShape3D.new()
+	var post_box := BoxShape3D.new()
+	post_box.size = Vector3(0.20, 2.8, 0.20)
+	post_shape.shape = post_box
+	post_shape.position = Vector3(0, 1.4, 0)
+	post_body.add_child(post_shape)
+	root.add_child(post_body)
+	var plate_shape := CollisionShape3D.new()
+	var plate_box := BoxShape3D.new()
+	plate_box.size = Vector3(1.05, 1.05, 0.18)
+	plate_shape.shape = plate_box
+	plate_shape.position = Vector3(0, 2.8, 0)
+	post_body.add_child(plate_shape)
 	if kind=="speed":
 		_disc(root,0.48,Color("ad342d"),0)
 		_disc(root,0.38,Color("e5e5dd"),0.025)

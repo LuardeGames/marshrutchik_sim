@@ -19,6 +19,7 @@ static func build(parent: Node3D, waypoints: Array[Vector3]) -> void:
 		for k in range(1,int(a.distance_to(b)/40.0)):
 			var pos := a+dir*float(k)*40.0+side*7.0
 			poles.append({"size":Vector3(0.15,7.0,0.15),"position":pos+Vector3(0,3.5,0),"y_rot":0.0})
+			WorldBuilder._invisible_collider(root,pos+Vector3(0,3.5,0),Vector3(0.28,7.0,0.28))
 			arms.append({"size":Vector3(2.1,0.10,0.10),"position":pos-side+Vector3(0,6.9,0),"y_rot":angle})
 		# Both approaches have a crossing, matching the roadside signs.
 		for distance in [12.0,a.distance_to(b)-12.0]:
@@ -73,6 +74,7 @@ static func build(parent: Node3D, waypoints: Array[Vector3]) -> void:
 		BusVisual.box(plaza,Vector3(-1.7,2.24,-1.79),Vector3(1.8,0.26,0.03),BusVisual.material(Color("294a6b")))
 		_sign(plaza,"ул. МИРА, %d" % (i*8+3),Vector3(-1.7,2.24,-1.82),0.0018)
 	_build_ambient_life(parent, waypoints)
+	_build_sidewalk_props(root, waypoints)
 
 static func _build_ambient_life(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	var rng := RandomNumberGenerator.new()
@@ -86,17 +88,18 @@ static func _build_ambient_life(parent: Node3D, waypoints: Array[Vector3]) -> vo
 		var length: float = a.distance_to(b)
 		var side_signs: Array[float] = [-1.0, 1.0]
 		for side_sign: float in side_signs:
-			var t := 0.24 + float((i + int(side_sign > 0.0)) % 3) * 0.17
-			var start: Vector3 = a.lerp(b, t) + side * side_sign * (RouteDefinition.ROAD_WIDTH * 0.5 + 3.0)
-			var finish: Vector3 = a.lerp(b, minf(t + 0.22, 0.90)) + side * side_sign * (RouteDefinition.ROAD_WIDTH * 0.5 + 3.0)
-			if _near_stop(start) or start.distance_to(finish) < 8.0:
-				continue
-			var pedestrian := AmbientPedestrian.new()
-			pedestrian.start_point = start + Vector3(0, 0.04, 0)
-			pedestrian.end_point = finish + Vector3(0, 0.04, 0)
-			pedestrian.variant = rng.randi_range(0, 3)
-			pedestrian.walk_speed = rng.randf_range(0.8, 1.25)
-			parent.add_child(pedestrian)
+			for pedestrian_index in range(2):
+				var t: float = 0.14 + float((i * 2 + pedestrian_index + int(side_sign > 0.0)) % 5) * 0.13
+				var start: Vector3 = a.lerp(b, t) + side * side_sign * (RouteDefinition.ROAD_WIDTH * 0.5 + 3.0)
+				var finish: Vector3 = a.lerp(b, minf(t + 0.16 + float(pedestrian_index) * 0.03, 0.90)) + side * side_sign * (RouteDefinition.ROAD_WIDTH * 0.5 + 3.0)
+				if _near_stop(start) or start.distance_to(finish) < 8.0:
+					continue
+				var pedestrian := AmbientPedestrian.new()
+				pedestrian.start_point = start + Vector3(0, 0.04, 0)
+				pedestrian.end_point = finish + Vector3(0, 0.04, 0)
+				pedestrian.variant = rng.randi_range(0, 3)
+				pedestrian.walk_speed = rng.randf_range(0.8, 1.25)
+				parent.add_child(pedestrian)
 		if length > 110.0 and i % 2 == 0:
 			var parked_pos: Vector3 = a.lerp(b, 0.67) + side * (RouteDefinition.ROAD_WIDTH * 0.5 + 2.7)
 			if not _near_stop(parked_pos):
@@ -117,6 +120,74 @@ static func _parked_car(parent: Node3D, pos: Vector3, direction: Vector3, color:
 	BusVisual.box(car, Vector3(0, 0.42, 0), Vector3(1.55, 0.55, 3.1), BusVisual.material(color))
 	BusVisual.box(car, Vector3(0, 0.82, -0.10), Vector3(1.25, 0.35, 1.45), BusVisual.material(Color("36484d"), 0.1))
 	BusVisual.box(car, Vector3(0, 0.36, -1.58), Vector3(1.62, 0.13, 0.08), BusVisual.material(Color("e0bf69")))
+	WorldBuilder._invisible_collider(car, Vector3(0, 0.65, 0), Vector3(1.65, 1.3, 3.2))
+
+static func _build_sidewalk_props(root: Node3D, waypoints: Array[Vector3]) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 91741
+	for i in range(waypoints.size()):
+		var a: Vector3 = waypoints[i]
+		var b: Vector3 = waypoints[(i + 1) % waypoints.size()]
+		var dir: Vector3 = (b - a).normalized()
+		var side: Vector3 = Vector3(-dir.z, 0, dir.x)
+		var angle: float = atan2(dir.x, dir.z)
+		for side_sign: float in [-1.0, 1.0]:
+			for prop_index in range(3):
+				var t: float = 0.18 + float(prop_index) * 0.25 + float((i + prop_index) % 2) * 0.04
+				var pos: Vector3 = a.lerp(b, minf(t, 0.88)) + side * side_sign * (RouteDefinition.ROAD_WIDTH * 0.5 + 3.15)
+				if _near_stop(pos):
+					continue
+				var kind: int = (i * 3 + prop_index + int(side_sign > 0.0)) % 5
+				_street_prop(root, pos, angle, kind, rng)
+
+static func _street_prop(root: Node3D, pos: Vector3, angle: float, kind: int, rng: RandomNumberGenerator) -> void:
+	var prop := Node3D.new()
+	prop.name = "SidewalkProp_%d" % kind
+	prop.position = pos
+	prop.rotation.y = angle
+	root.add_child(prop)
+	var metal := BusVisual.material(Color("596461"))
+	var green_colors: Array[Color] = [Color("58724b"), Color("70865a"), Color("466a4f")]
+	var green: Color = green_colors[rng.randi_range(0, 2)]
+	match kind:
+		0:
+			BusVisual.box(prop, Vector3(0, 0.42, 0), Vector3(0.58, 0.84, 0.58), metal)
+			BusVisual.box(prop, Vector3(0, 0.88, 0), Vector3(0.48, 0.08, 0.48), BusVisual.material(Color("252d2d")))
+			WorldBuilder._invisible_collider(prop, Vector3(0, 0.42, 0), Vector3(0.62, 0.86, 0.62))
+		1:
+			BusVisual.box(prop, Vector3(0, 0.52, 0.08), Vector3(1.9, 0.12, 0.48), BusVisual.material(Color("77533d")))
+			BusVisual.box(prop, Vector3(0, 0.87, -0.12), Vector3(1.9, 0.62, 0.10), BusVisual.material(Color("77533d")))
+			for x in [-0.7, 0.7]:
+				BusVisual.box(prop, Vector3(x, 0.27, 0.08), Vector3(0.10, 0.54, 0.10), metal)
+			WorldBuilder._invisible_collider(prop, Vector3(0, 0.55, 0), Vector3(2.0, 1.2, 0.65))
+		2:
+			BusVisual.box(prop, Vector3(0, 0.18, 0), Vector3(1.55, 0.36, 0.85), BusVisual.material(Color("9b8970")))
+			for x in [-0.48, 0.0, 0.48]:
+				_shrub(prop, Vector3(x, 0.60, 0), green, rng.randf_range(0.72, 1.05))
+			WorldBuilder._invisible_collider(prop, Vector3(0, 0.42, 0), Vector3(1.65, 0.70, 0.95))
+		3:
+			for x in [-0.9, 0.0, 0.9]:
+				BusVisual.box(prop, Vector3(x, 0.62, 0), Vector3(0.12, 1.24, 0.12), metal)
+			BusVisual.box(prop, Vector3(0, 0.82, 0), Vector3(1.9, 0.10, 0.10), metal)
+			WorldBuilder._invisible_collider(prop, Vector3(0, 0.62, 0), Vector3(2.0, 1.25, 0.18))
+		4:
+			BusVisual.box(prop, Vector3(0, 0.55, 0), Vector3(0.90, 1.10, 0.72), BusVisual.material(Color("65706e")))
+			BusVisual.box(prop, Vector3(0, 1.14, 0), Vector3(0.98, 0.08, 0.80), metal)
+			BusVisual.box(prop, Vector3(0.46, 0.68, 0), Vector3(0.04, 0.26, 0.32), BusVisual.material(Color("d2b85e")))
+			WorldBuilder._invisible_collider(prop, Vector3(0, 0.55, 0), Vector3(0.96, 1.14, 0.78))
+
+static func _shrub(parent: Node3D, pos: Vector3, color: Color, scale_value: float) -> void:
+	var shrub := MeshInstance3D.new()
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.42
+	mesh.height = 0.78
+	mesh.radial_segments = 8
+	mesh.rings = 3
+	shrub.mesh = mesh
+	shrub.material_override = BusVisual.material(color)
+	shrub.position = pos
+	shrub.scale = Vector3(scale_value, scale_value, scale_value)
+	parent.add_child(shrub)
 
 static func _sign(parent: Node3D,text: String,pos: Vector3,pixel: float) -> void:
 	var label:=Label3D.new()
