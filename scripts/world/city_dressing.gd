@@ -248,7 +248,9 @@ static func _build_neighborhood_life(root: Node3D, waypoints: Array[Vector3]) ->
 	var colors: Array[Color] = [Color("536a72"), Color("8b5148"), Color("b18d53"), Color("65745b")]
 	var courtyard_index := 0
 	for i in range(waypoints.size()):
-		if i % 2 == 0:
+		# These two route edges cross the civic and industrial loops; a yard
+		# here would put its storage row directly on the secondary street.
+		if i % 2 == 0 or i in [5, 13]:
 			continue
 		var a: Vector3 = waypoints[i]
 		var b: Vector3 = waypoints[(i + 1) % waypoints.size()]
