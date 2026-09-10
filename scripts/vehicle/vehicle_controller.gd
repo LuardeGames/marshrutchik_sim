@@ -21,7 +21,7 @@ var passengers_aboard: int = 0
 ## Slower than a car's rack-and-pinion on purpose: a loaded minibus takes a
 ## beat to lean into a turn instead of snapping the wheel instantly, which is
 ## most of what made the bus feel "reactive"/twitchy rather than heavy.
-const STEER_RATE := 1.35
+const STEER_RATE := 1.1 # slower wheel wind-up still - an old, heavy minibus
 const STEER_MAX := 0.6
 ## Cornering radius at speed v is roughly v/MAX_TURN_RATE - dropping this too
 ## far below the original 1.15 (as a first pass did, to ~0.78) widens that
@@ -107,7 +107,7 @@ func _handle_input(delta: float) -> void:
 		# a constant rate all the way there like a go-kart. This is most of
 		# what "тяжёлая" driving feel actually is - the mid-range pull fades.
 		var speed_ratio_now: float = clamp(speed / max(max_speed, 0.01), 0.0, 1.0)
-		var power_taper: float = lerp(1.0, 0.35, speed_ratio_now)
+		var power_taper: float = lerp(1.0, 0.22, speed_ratio_now)
 		speed += acceleration * power_taper * delta
 	elif brake > 0.0:
 		if speed > 0.0:

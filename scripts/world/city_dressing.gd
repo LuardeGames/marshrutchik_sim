@@ -212,9 +212,12 @@ static func _build_parks_and_courtyards(root: Node3D, waypoints: Array[Vector3])
 		for x in [-6.0, 6.0]:
 			for z in [-10.0, 0.0, 10.0]:
 				var tree_pos := Vector3(x, 0, z)
-				WorldBuilder._box(park, tree_pos + Vector3(0, 0.8, 0), Vector3(0.65, 1.6, 0.65), Color("76533e"), false)
-				_shrub(park, tree_pos + Vector3(0, 2.25, 0), Color("4b704d"), 1.45)
-				WorldBuilder._invisible_collider(park, tree_pos + Vector3(0, 1.2, 0), Vector3(1.1, 2.4, 1.1))
+				# Was a 2.8m sapling standing next to a 2.25m-tall bus - read as
+				# a shrub, not a tree. A real street tree clears a minibus roof
+				# by a wide margin; scaled up to ~4.6m overall.
+				WorldBuilder._box(park, tree_pos + Vector3(0, 1.15, 0), Vector3(0.8, 2.3, 0.8), Color("76533e"), false)
+				_shrub(park, tree_pos + Vector3(0, 3.1, 0), Color("4b704d"), 2.1)
+				WorldBuilder._invisible_collider(park, tree_pos + Vector3(0, 1.7, 0), Vector3(1.3, 3.4, 1.3))
 		WorldBuilder._box(park, Vector3(-5.0, 0.55, 4.0), Vector3(3.0, 0.12, 0.55), Color("735442"), false)
 		WorldBuilder._box(park, Vector3(-5.0, 0.30, 4.0), Vector3(0.10, 0.6, 0.5), Color("596461"), false)
 		WorldBuilder._box(park, Vector3(-3.8, 0.30, 4.0), Vector3(0.10, 0.6, 0.5), Color("596461"), false)
@@ -280,8 +283,12 @@ static func _build_neighborhood_life(root: Node3D, waypoints: Array[Vector3]) ->
 		WorldBuilder._box(yard, Vector3(-8.0, 0.45, 0.5), Vector3(0.75, 0.9, 0.75), Color("596461"))
 		WorldBuilder._box(yard, Vector3(-6.8, 0.45, 0.5), Vector3(0.75, 0.9, 0.75), Color("596461"))
 		for x in [-9.0, 9.0]:
-			_shrub(yard, Vector3(x, 1.3, 6.8), Color("4f704d"), 1.25)
-			WorldBuilder._invisible_collider(yard, Vector3(x, 1.1, 6.8), Vector3(1.0, 2.2, 1.0))
+			# Was a bare floating shrub sphere doing duty as a "tree" - give it
+			# a trunk and the same taller canopy as the park trees so yards
+			# don't read as smaller/emptier than the parks next to them.
+			WorldBuilder._box(yard, Vector3(x, 1.15, 6.8), Vector3(0.8, 2.3, 0.8), Color("76533e"), false)
+			_shrub(yard, Vector3(x, 3.1, 6.8), Color("4f704d"), 2.1)
+			WorldBuilder._invisible_collider(yard, Vector3(x, 1.7, 6.8), Vector3(1.3, 3.4, 1.3))
 		courtyard_index += 1
 
 static func _sign(parent: Node3D,text: String,pos: Vector3,pixel: float) -> void:

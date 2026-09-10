@@ -12,8 +12,8 @@ static func build() -> Array[VehicleDefinition]:
 	old.body_color = Color("dfc77d")
 	old.accent_color = Color(0.25, 0.25, 0.25)
 	old.base_max_speed = 25.0 # ~90 km/h top end - well above the 60 city limit
-	old.base_acceleration = 2.6 # heavy, gradual pull-off, not a jackrabbit start
-	old.base_brake_force = 9.0
+	old.base_acceleration = 2.1 # an old, tired engine - heavy, gradual pull-off
+	old.base_brake_force = 8.0
 	old.base_capacity = 10
 	old.length = 5.45
 	old.width = 1.95
@@ -31,8 +31,8 @@ static func build() -> Array[VehicleDefinition]:
 	modern.body_color = Color("ddd4b2")
 	modern.accent_color = Color("817b45")
 	modern.base_max_speed = 22.0 # ~79 km/h - lower top end than the Gazelle
-	modern.base_acceleration = 1.9 # noticeably heavier off the line
-	modern.base_brake_force = 8.0
+	modern.base_acceleration = 1.55 # noticeably heavier off the line
+	modern.base_brake_force = 7.2
 	modern.base_capacity = 23
 	modern.length = 6.9
 	modern.width = 2.5

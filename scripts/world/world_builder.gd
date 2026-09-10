@@ -12,6 +12,13 @@ const ROAD_WIDTH := RouteDefinition.ROAD_WIDTH
 ## - this was the single biggest "empty city" complaint. 460 clears that on
 ## all three routes' waypoint bounds with room to spare.
 const MAP_MARGIN := 460.0
+## Was a flat 3.0 (a real panel-block storey), which is technically correct
+## next to a ~2.25m-tall Gazelle but read as squat once the camera sat close
+## and low to the car - the bus looked like it nearly filled a whole floor.
+## Bumped for a heavier, more monumental skyline; the facade shader's window
+## rows are re-tiled to this same height (see facade.gdshader) so the extra
+## storey height doesn't stretch the window texture.
+const FLOOR_HEIGHT := 3.35
 
 static func build(parent: Node3D) -> Dictionary:
 	var waypoints := RouteDefinition.waypoints()
@@ -438,7 +445,7 @@ static func _build_residential(parent: Node3D, center: Vector3, perp: Vector3, r
 		# from it, so buildings can never randomly drift back onto the road
 		var offset := perp * (22.0 + i * 16.0) + tangent * rng.randf_range(-10.0, 10.0)
 		var floors := rng.randi_range(5, 9)
-		var height := floors * 3.0
+		var height := floors * FLOOR_HEIGHT
 		var b := _box(parent, center + offset, Vector3(14.0, height, 12.0), _jitter(colors[i % colors.size()], rng))
 		b.position.y = height / 2.0
 		_add_window_band(b, Vector3(14.0, height, 12.0))
@@ -602,8 +609,8 @@ static func _add_window_band(building: Node3D, size: Vector3) -> void:
 	_box(building, Vector3(0,-size.y/2.0+1.1,-size.z/2.0-0.035),Vector3(1.3,2.2,0.09),Color("3f625c"),false)
 	_box(building, Vector3(0,-size.y/2.0+2.5,-size.z/2.0-0.6),Vector3(2.4,0.16,1.4),Color("8c918b"),false)
 	for floor_index in range(1,int(size.y/3.0)):
-		_box(building,Vector3(size.x*0.25,-size.y/2.0+float(floor_index)*3.0,-size.z/2.0-0.45),Vector3(2.3,0.18,1.0),Color("aca796"),false)
-		_box(building,Vector3(size.x*0.25,-size.y/2.0+float(floor_index)*3.0+0.52,-size.z/2.0-0.94),Vector3(2.3,0.9,0.10),Color("8b958b"),false)
+		_box(building,Vector3(size.x*0.25,-size.y/2.0+float(floor_index)*FLOOR_HEIGHT,-size.z/2.0-0.45),Vector3(2.3,0.18,1.0),Color("aca796"),false)
+		_box(building,Vector3(size.x*0.25,-size.y/2.0+float(floor_index)*FLOOR_HEIGHT+0.52,-size.z/2.0-0.94),Vector3(2.3,0.9,0.10),Color("8b958b"),false)
 
 ## Continuous street fronts and deeper residential blocks, with explicit lot
 ## reservations so scenery never occupies roads, stops or existing landmarks.
@@ -661,7 +668,7 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 			for side in [-1.0,1.0]:
 				for row in range(2):
 					var pos: Vector3 = a.lerp(b,(i+0.5)/float(count))+perp*side*(23.0+row*38.0)
-					var size := Vector3(30, float(rng.randi_range(5,9))*3,12) if absf(dir.x)>0.5 else Vector3(12,float(rng.randi_range(5,9))*3,30)
+					var size := Vector3(34, float(rng.randi_range(5,9))*FLOOR_HEIGHT,14) if absf(dir.x)>0.5 else Vector3(14,float(rng.randi_range(5,9))*FLOOR_HEIGHT,34)
 					_place_city_block(parent,pos,size,reserved,occupied,front_entries,rng)
 	# Smaller three-to-six-storey sections fit between junction clearances and
 	# landmarks where a full 30-metre slab would leave an empty street edge.
@@ -674,7 +681,7 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 		for i in range(count):
 			for side: float in [-1.0, 1.0]:
 				var pos: Vector3 = a.lerp(b, (float(i) + 0.5) / float(count)) + perp * side * 22.0
-				var size := Vector3(18, float(rng.randi_range(3, 6)) * 3, 10) if absf(dir.x) > 0.5 else Vector3(10, float(rng.randi_range(3, 6)) * 3, 18)
+				var size := Vector3(20, float(rng.randi_range(3, 6)) * FLOOR_HEIGHT, 12) if absf(dir.x) > 0.5 else Vector3(12, float(rng.randi_range(3, 6)) * FLOOR_HEIGHT, 20)
 				_place_city_block(parent, pos, size, reserved, occupied, front_entries, rng)
 	# Fill the interior and extend beyond the outer avenue - out to just
 	# short of the fixed backdrop skyline (see MAP_MARGIN) so that band isn't
@@ -684,7 +691,7 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 	for x in range(-280, 971, 46):
 		for z in range(-770, 471, 46):
 			var pos := Vector3(x,0,z)
-			var size := Vector3(32,float(rng.randi_range(5,12))*3,16) if (x/46+z/46)%2==0 else Vector3(16,float(rng.randi_range(5,12))*3,32)
+			var size := Vector3(36,float(rng.randi_range(5,12))*FLOOR_HEIGHT,18) if (x/46+z/46)%2==0 else Vector3(18,float(rng.randi_range(5,12))*FLOOR_HEIGHT,36)
 			_place_city_block(parent,pos,size,reserved,occupied,front_entries,rng)
 	_build_backdrop_blocks(back_entries, rng)
 	parent.set_meta("city_buildings",front_entries.size())
@@ -722,7 +729,7 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 				doors.append({"size": Vector3(1.2, 2.1, 0.05), "position": Vector3(e.position.x, 1.05, front_z + facade_side * 0.03), "y_rot": 0.0})
 				roofs.append({"size": Vector3(2.1, 0.14, 1.5), "position": Vector3(e.position.x, 2.4, front_z + facade_side * 0.7), "y_rot": 0.0})
 				for floor_index in range(1, int(e.size.y / 3.0)):
-					var y := float(floor_index) * 3.0 + 0.3
+					var y := float(floor_index) * FLOOR_HEIGHT + 0.3
 					balconies.append({"size": Vector3(2.2, 0.14, 0.95), "position": Vector3(balcony_x, y, front_z + facade_side * 0.45), "y_rot": 0.0})
 					balconies.append({"size": Vector3(2.2, 0.82, 0.08), "position": Vector3(balcony_x, y + 0.45, front_z + facade_side * 0.89), "y_rot": 0.0})
 		else:
@@ -732,7 +739,7 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 				doors.append({"size": Vector3(0.05, 2.1, 1.2), "position": Vector3(front_x + facade_side * 0.03, 1.05, e.position.z), "y_rot": 0.0})
 				roofs.append({"size": Vector3(1.5, 0.14, 2.1), "position": Vector3(front_x + facade_side * 0.7, 2.4, e.position.z), "y_rot": 0.0})
 				for floor_index in range(1, int(e.size.y / 3.0)):
-					var y := float(floor_index) * 3.0 + 0.3
+					var y := float(floor_index) * FLOOR_HEIGHT + 0.3
 					balconies.append({"size": Vector3(0.95, 0.14, 2.2), "position": Vector3(front_x + facade_side * 0.45, y, balcony_z), "y_rot": 0.0})
 					balconies.append({"size": Vector3(0.08, 0.82, 2.2), "position": Vector3(front_x + facade_side * 0.89, y + 0.45, balcony_z), "y_rot": 0.0})
 	_multimesh_boxes(parent,"ApartmentFootpaths",CityMaterials.surface("paving"),walks)
@@ -753,11 +760,11 @@ static func _build_backdrop_blocks(entries: Array, rng: RandomNumberGenerator) -
 	var colors := [Color("858c8b"), Color("8f8c84"), Color("7d8589"), Color("91877e")]
 	for z: float in [-790.0, -840.0, 490.0, 540.0]:
 		for x in range(-340, 981, 38):
-			var size := Vector3(28.0, float(rng.randi_range(7, 15)) * 3.0, 18.0)
+			var size := Vector3(28.0, float(rng.randi_range(7, 15)) * FLOOR_HEIGHT, 18.0)
 			entries.append({"size": size, "position": Vector3(x, size.y * 0.5, z), "y_rot": 0.0, "color": colors[rng.randi() % colors.size()]})
 	for x: float in [-350.0, -400.0, 990.0, 1040.0]:
 		for z in range(-752, 453, 38):
-			var size := Vector3(18.0, float(rng.randi_range(7, 15)) * 3.0, 28.0)
+			var size := Vector3(18.0, float(rng.randi_range(7, 15)) * FLOOR_HEIGHT, 28.0)
 			entries.append({"size": size, "position": Vector3(x, size.y * 0.5, z), "y_rot": 0.0, "color": colors[rng.randi() % colors.size()]})
 
 static func _add_network_loop(parent: Node3D, streets: Array, points: Array[Vector3]) -> void:
