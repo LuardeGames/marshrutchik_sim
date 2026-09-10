@@ -204,6 +204,37 @@ static func _build_road(parent: Node3D, waypoints: Array[Vector3]) -> void:
 			sidewalk_pos.y = 0.05
 			sidewalk_entries.append({"size": Vector3(3.2, 0.1, maxf(1.0,a.distance_to(b)-ROAD_WIDTH)), "position": sidewalk_pos, "y_rot": angle})
 
+	# Corner fill: each edge's curb/sidewalk above stops ROAD_WIDTH/2 short of
+	# every vertex on purpose, so two edges meeting at an angle never need a
+	# mitred join - but with nothing placed in that gap it read as a visibly
+	# broken curb at every turn. Cap it with a box sized to the actual offset
+	# between the incoming and outgoing edge's curb/sidewalk line on each
+	# side; degenerates to a tiny corner dot where an edge runs straight
+	# through (incoming and outgoing directions equal).
+	var curb_offset := ROAD_WIDTH / 2.0 + 0.2
+	var walk_offset := ROAD_WIDTH / 2.0 + 1.9
+	for i in range(n):
+		var prev_pt: Vector3 = waypoints[(i - 1 + n) % n]
+		var cur_pt: Vector3 = waypoints[i]
+		var next_pt: Vector3 = waypoints[(i + 1) % n]
+		var in_dir := (cur_pt - prev_pt).normalized()
+		var out_dir := (next_pt - cur_pt).normalized()
+		var in_perp := Vector3(-in_dir.z, 0, in_dir.x)
+		var out_perp := Vector3(-out_dir.z, 0, out_dir.x)
+		for side in [-1.0, 1.0]:
+			var p_in: Vector3 = cur_pt + in_perp * side * curb_offset
+			var p_out: Vector3 = cur_pt + out_perp * side * curb_offset
+			var corner := (p_in + p_out) * 0.5
+			var gap := Vector3(absf(p_out.x - p_in.x) + 0.35, 0.0, absf(p_out.z - p_in.z) + 0.35)
+			if gap.x > 0.4 and gap.z > 0.4:
+				curb_entries.append({"size": Vector3(gap.x, 0.22, gap.z), "position": Vector3(corner.x, 0.11, corner.z), "y_rot": 0.0})
+			var pw_in: Vector3 = cur_pt + in_perp * side * walk_offset
+			var pw_out: Vector3 = cur_pt + out_perp * side * walk_offset
+			var corner_w := (pw_in + pw_out) * 0.5
+			var gap_w := Vector3(absf(pw_out.x - pw_in.x) + 3.2, 0.0, absf(pw_out.z - pw_in.z) + 3.2)
+			if gap_w.x > 0.4 and gap_w.z > 0.4:
+				sidewalk_entries.append({"size": Vector3(gap_w.x, 0.1, gap_w.z), "position": Vector3(corner_w.x, 0.05, corner_w.z), "y_rot": 0.0})
+
 	_multimesh_boxes(road_root, "RoadStrips", asphalt, road_entries)
 	_multimesh_boxes(road_root, "LaneDashes", line_mat, dash_entries)
 	_multimesh_boxes(road_root, "Curbs", curb_mat, curb_entries)
@@ -784,6 +815,30 @@ static func is_road_surface(pos: Vector3, surfaces: Array, margin: float = 0.0) 
 			return true
 	return false
 
+## A CIS courtyard's parking/garage row is never an island in the grass -
+## it hangs off a real проезд from the street. Draws a straight asphalt
+## strip from a yard lot to the nearest registered road's centerline (skips
+## it if that road is implausibly far away, rather than drawing a driveway
+## across half the district).
+static func _add_yard_driveway(pos: Vector3, surfaces: Array, driveways: Array) -> void:
+	var best_dist := INF
+	var best_point := pos
+	for surface: Dictionary in surfaces:
+		var a: Vector3 = surface["a"]
+		var b: Vector3 = surface["b"]
+		var point := Geometry3D.get_closest_point_to_segment(pos, a, b)
+		var dist := pos.distance_to(point)
+		if dist < best_dist:
+			best_dist = dist
+			best_point = point
+	if best_dist < 3.0 or best_dist > 42.0:
+		return
+	var to_road: Vector3 = best_point - pos
+	to_road.y = 0.0
+	var dir := to_road.normalized()
+	var mid := pos + dir * (best_dist * 0.5)
+	driveways.append({"size": Vector3(4.4, 0.09, best_dist + 4.0), "position": Vector3(mid.x, 0.045, mid.z), "y_rot": atan2(dir.x, dir.z)})
+
 ## Turns leftover lots into readable courtyards instead of scattering the
 ## same tiny planter across every empty patch.
 static func _build_pocket_gardens(parent: Node3D) -> void:
@@ -803,6 +858,7 @@ static func _build_pocket_gardens(parent: Node3D) -> void:
 	var garage_bodies: Array = []
 	var garage_roofs: Array = []
 	var garage_doors: Array = []
+	var driveways: Array = []
 	var count: int = 0
 	# Covers the same footprint as the building fill grid (see MAP_MARGIN /
 	# the interior fill loop above) - this used to stop at the old, smaller
@@ -851,7 +907,7 @@ static func _build_pocket_gardens(parent: Node3D) -> void:
 						tree_crowns.append({"size": Vector3(3.5, 4.2, 3.5), "position": tree_pos + Vector3(0, 3.5, 0), "y_rot": 0.0})
 						_invisible_collider(parent, tree_pos + Vector3(0, 1.1, 0), Vector3(0.9, 2.2, 0.9))
 				1:
-					parking_surfaces.append({"size": Vector3(18, 0.08, 18), "position": pos + Vector3(0, 0.04, 0), "y_rot": 0.0})
+					parking_surfaces.append({"size": Vector3(20, 0.08, 20), "position": pos + Vector3(0, 0.04, 0), "y_rot": 0.0})
 					for line_x in [-7.0, -3.5, 0.0, 3.5, 7.0]:
 						parking_lines.append({"size": Vector3(0.10, 0.015, 15), "position": pos + Vector3(line_x, 0.09, 0), "y_rot": 0.0})
 					for car_x in [-5.2, 0.0, 5.2]:
@@ -859,17 +915,20 @@ static func _build_pocket_gardens(parent: Node3D) -> void:
 						parked_cars.append({"size": Vector3(1.75, 0.62, 3.5), "position": car_pos + Vector3(0, 0.42, 0), "y_rot": 0.0})
 						parked_windows.append({"size": Vector3(1.38, 0.36, 1.65), "position": car_pos + Vector3(0, 0.85, -0.1), "y_rot": 0.0})
 						_invisible_collider(parent, car_pos + Vector3(0, 0.65, 0), Vector3(1.85, 1.3, 3.6))
+					_add_yard_driveway(pos, surfaces, driveways)
 				2:
-					parking_surfaces.append({"size": Vector3(18, 0.08, 18), "position": pos + Vector3(0, 0.04, 0), "y_rot": 0.0})
+					parking_surfaces.append({"size": Vector3(20, 0.08, 20), "position": pos + Vector3(0, 0.04, 0), "y_rot": 0.0})
 					for garage_x in [-5.7, 0.0, 5.7]:
 						var garage_pos := pos + Vector3(garage_x, 0, 1.8)
 						garage_bodies.append({"size": Vector3(5.0, 2.7, 6.5), "position": garage_pos + Vector3(0, 1.35, 0), "y_rot": 0.0})
 						garage_roofs.append({"size": Vector3(5.3, 0.20, 6.8), "position": garage_pos + Vector3(0, 2.8, 0), "y_rot": 0.0})
 						garage_doors.append({"size": Vector3(4.2, 2.15, 0.10), "position": garage_pos + Vector3(0, 1.1, -3.3), "y_rot": 0.0})
 						_invisible_collider(parent, garage_pos + Vector3(0, 1.35, 0), Vector3(5.0, 2.7, 6.5))
+					_add_yard_driveway(pos, surfaces, driveways)
 			count += 1
 	parent.set_meta("pocket_gardens", count)
 	_multimesh_boxes(parent, "CourtyardPaths", CityMaterials.surface("paving"), courtyard_paths)
+	_multimesh_boxes(parent, "YardDriveways", CityMaterials.surface("asphalt"), driveways)
 	_multimesh_boxes(parent, "LotParking", CityMaterials.surface("asphalt"), parking_surfaces)
 	_multimesh_boxes(parent, "ParkingLines", BusVisual.material(Color("c6c5b8")), parking_lines)
 	_multimesh_boxes(parent, "GardenBeds", CityMaterials.surface("concrete"), planters)
