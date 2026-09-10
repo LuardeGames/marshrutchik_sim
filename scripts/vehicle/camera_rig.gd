@@ -6,15 +6,15 @@ class_name CameraRig
 ## a little different from standing at a stop.
 
 @export var target: Node3D
-@export var follow_distance: float = 7.6
-@export var follow_height: float = 3.0
-@export var look_height: float = 1.55
+@export var follow_distance: float = 5.6
+@export var follow_height: float = 2.0
+@export var look_height: float = 1.4
 @export var position_smooth: float = 5.5
 @export var rotation_smooth: float = 6.5
 
-const FOV_BASE := 64.0
-const FOV_MAX_KICK := 10.0 # extra FOV at top speed - cheap sense of speed
-const DISTANCE_SPEED_KICK := 1.6 # camera drifts back a little as speed rises
+const FOV_BASE := 52.0
+const FOV_MAX_KICK := 8.0 # extra FOV at top speed - cheap sense of speed
+const DISTANCE_SPEED_KICK := 1.3 # camera drifts back a little as speed rises
 const LEAN_TILT_MAX := 0.045 # subtle roll into turns, radians
 
 var camera: Camera3D
