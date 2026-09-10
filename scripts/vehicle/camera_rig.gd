@@ -33,7 +33,14 @@ func _ready() -> void:
 		global_position = desired.origin
 		look_at(target.global_position + Vector3.UP * look_height, Vector3.UP)
 
-func _process(delta: float) -> void:
+func _physics_process(delta: float) -> void:
+	# Physics-stepped, not _process: the target is a CharacterBody3D moved in
+	# _physics_process at a fixed tick rate, so sampling its position from a
+	# variable-rate _process desyncs the camera from the car whenever the
+	# render frame rate dips below the physics rate (a heavy scene under the
+	# WebGL/Compatibility renderer, e.g.) - the camera visibly stutters/judders
+	# for several ticks and then snaps to catch up. Matching the physics tick
+	# keeps the follow smooth regardless of render FPS.
 	if target == null or not is_instance_valid(target):
 		return
 	var vehicle := target as VehicleController
@@ -65,8 +72,19 @@ func _process(delta: float) -> void:
 
 func _desired_transform(speed_ratio: float) -> Transform3D:
 	var back := target.global_transform.basis.z.normalized()
-	var distance := follow_distance + DISTANCE_SPEED_KICK * speed_ratio
-	var pos := target.global_position + back * distance + Vector3.UP * follow_height
+	# The PAZ (length 6.9, height 2.95) is noticeably bigger than the Gazelle
+	# (5.45 / 2.25) it was tuned against - at a fixed follow_distance the PAZ's
+	# tall rear panel fills the frame edge-to-edge and the road ahead all but
+	# disappears. Pull back/up a bit extra in proportion to how much bigger
+	# the current bus is than that baseline.
+	var size_bonus := 0.0
+	var height_bonus := 0.0
+	var vehicle := target as VehicleController
+	if vehicle and vehicle.definition:
+		size_bonus = max(0.0, vehicle.definition.length - 5.45) * 0.6
+		height_bonus = max(0.0, vehicle.definition.height - 2.25) * 0.5
+	var distance := follow_distance + size_bonus + DISTANCE_SPEED_KICK * speed_ratio
+	var pos := target.global_position + back * distance + Vector3.UP * (follow_height + height_bonus)
 	var from := target.global_position + Vector3.UP * look_height
 	var query := PhysicsRayQueryParameters3D.create(from, pos, 1)
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
