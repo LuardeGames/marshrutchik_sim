@@ -5,7 +5,13 @@ class_name WorldBuilder
 ## Nothing here needs an external 3D asset.
 
 const ROAD_WIDTH := RouteDefinition.ROAD_WIDTH
-const MAP_MARGIN := 300.0
+## Ground/collision extends this far past the route's own waypoints. Must
+## reach past the fixed-coordinate backdrop skyline in _build_backdrop_blocks
+## (x up to ~1049, z from -849 to 549) on every route, or those buildings
+## float over bare fog with a visible dead strip of nothing in front of them
+## - this was the single biggest "empty city" complaint. 460 clears that on
+## all three routes' waypoint bounds with room to spare.
+const MAP_MARGIN := 460.0
 
 static func build(parent: Node3D) -> Dictionary:
 	var waypoints := RouteDefinition.waypoints()
@@ -460,7 +466,10 @@ static func _build_city_variety(parent: Node3D) -> void:
 	# of shapes - placed well clear of every route's waypoints and the fixed
 	# traffic loops (checked against all three route layouts, not just 47).
 	_build_auto_service(parent, Vector3(-260, 0, -520), Vector3(20, 6, 14))
-	_build_mall(parent, Vector3(300, 0, -520), Vector3(34, 9, 20))
+	# NOT (300,-520): that sits directly on the fixed north-south connecting
+	# street at x=300 (z -600..-460) in _build_filler's `links` - confirmed
+	# by tests/city_roads_test.gd finding 10 blocked lane samples there.
+	_build_mall(parent, Vector3(580, 0, -650), Vector3(34, 9, 20))
 	_build_sports_hall(parent, Vector3(650, 0, 245), Vector3(28, 9, 20))
 
 static func _build_brick_house(parent: Node3D, pos: Vector3, size: Vector3, y_rot: float) -> void:
@@ -628,10 +637,13 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 				var pos: Vector3 = a.lerp(b, (float(i) + 0.5) / float(count)) + perp * side * 22.0
 				var size := Vector3(18, float(rng.randi_range(3, 6)) * 3, 10) if absf(dir.x) > 0.5 else Vector3(10, float(rng.randi_range(3, 6)) * 3, 18)
 				_place_city_block(parent, pos, size, reserved, occupied, front_entries, rng)
-	# Fill the interior and extend beyond the outer avenue. Alternating slab
-	# orientation leaves connected courtyards instead of isolated towers.
-	for x in range(-280, 921, 46):
-		for z in range(-720, 421, 46):
+	# Fill the interior and extend beyond the outer avenue - out to just
+	# short of the fixed backdrop skyline (see MAP_MARGIN) so that band isn't
+	# bare grass between the built-up city and the distant silhouette.
+	# Alternating slab orientation leaves connected courtyards instead of
+	# isolated towers.
+	for x in range(-280, 971, 46):
+		for z in range(-770, 471, 46):
 			var pos := Vector3(x,0,z)
 			var size := Vector3(32,float(rng.randi_range(5,12))*3,16) if (x/46+z/46)%2==0 else Vector3(16,float(rng.randi_range(5,12))*3,32)
 			_place_city_block(parent,pos,size,reserved,occupied,front_entries,rng)
@@ -792,20 +804,38 @@ static func _build_pocket_gardens(parent: Node3D) -> void:
 	var garage_roofs: Array = []
 	var garage_doors: Array = []
 	var count: int = 0
-	for x in range(-120, 741, 22):
-		for z in range(-580, 261, 22):
+	# Covers the same footprint as the building fill grid (see MAP_MARGIN /
+	# the interior fill loop above) - this used to stop at the old, smaller
+	# city bounds, so most of the newer, wider city was just bare grass
+	# around the buildings with no yards, paths or playgrounds at all.
+	# The building-fill pass keeps a 20m clearance box around every route
+	# waypoint (corners need room to turn) but that reservation is a plain
+	# Rect2, never a real collider, so _collect_occupied() below can't see
+	# it - a pocket-garden prop (garage, parked car) could land right on a
+	# corner's swept path. Rebuild that same clearance here explicitly.
+	var waypoint_clearance: Array[Rect2] = []
+	for point in RouteDefinition.waypoints():
+		waypoint_clearance.append(Rect2(Vector2(point.x - 20.0, point.z - 20.0), Vector2(40.0, 40.0)))
+	for x in range(-280, 971, 22):
+		for z in range(-770, 471, 22):
 			var pos := Vector3(x, 0, z)
 			var lot := Rect2(Vector2(x - 9, z - 9), Vector2(18, 18))
 			var blocked: bool = is_road_surface(pos, surfaces, 13.0)
+			for rect: Rect2 in waypoint_clearance:
+				if lot.intersects(rect):
+					blocked = true
+					break
 			for rect: Rect2 in occupied:
+				if blocked:
+					break
 				if lot.intersects(rect):
 					blocked = true
 					break
 			if blocked:
 				continue
 			occupied.append(lot)
-			var grid_x := int((x + 120) / 22)
-			var grid_z := int((z + 580) / 22)
+			var grid_x := int((x + 280) / 22)
+			var grid_z := int((z + 770) / 22)
 			var variant := (floori(float(grid_x) / 2.0) + floori(float(grid_z) / 2.0)) % 3
 			match variant:
 				0:

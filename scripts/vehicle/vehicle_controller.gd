@@ -23,7 +23,12 @@ var passengers_aboard: int = 0
 ## most of what made the bus feel "reactive"/twitchy rather than heavy.
 const STEER_RATE := 1.35
 const STEER_MAX := 0.6
-const MAX_TURN_RATE := 0.78 # rad/s at full lock, low speed (~45°/s)
+## Cornering radius at speed v is roughly v/MAX_TURN_RATE - dropping this too
+## far below the original 1.15 (as a first pass did, to ~0.78) widens that
+## radius enough to clip corner buildings the road was authored around;
+## tests/driving_test.gd caught it running the whole route. 0.98 still reads
+## clearly slower than the old twitchy 1.15 but keeps the turn tight enough.
+const MAX_TURN_RATE := 0.98 # rad/s at full lock, low speed (~56°/s)
 const GRAVITY := 18.0
 const BODY_LEAN_MAX := 0.12
 const COMFORT_CHECK_COOLDOWN := 0.35
