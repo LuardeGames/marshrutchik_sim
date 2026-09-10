@@ -456,6 +456,12 @@ static func _build_city_variety(parent: Node3D) -> void:
 	_build_cinema(parent, Vector3(225, 0, 245), Vector3(26, 8, 18))
 	_build_market_hall(parent, Vector3(-185, 0, -175), Vector3(26, 8, 18))
 	_build_warehouse(parent, Vector3(720, 0, -500), Vector3(30, 8, 22))
+	# Extra one-off silhouettes so the drive doesn't repeat the same handful
+	# of shapes - placed well clear of every route's waypoints and the fixed
+	# traffic loops (checked against all three route layouts, not just 47).
+	_build_auto_service(parent, Vector3(-260, 0, -520), Vector3(20, 6, 14))
+	_build_mall(parent, Vector3(300, 0, -520), Vector3(34, 9, 20))
+	_build_sports_hall(parent, Vector3(650, 0, 245), Vector3(28, 9, 20))
 
 static func _build_brick_house(parent: Node3D, pos: Vector3, size: Vector3, y_rot: float) -> void:
 	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("a86e55"), true, y_rot)
@@ -516,6 +522,27 @@ static func _build_warehouse(parent: Node3D, pos: Vector3, size: Vector3) -> voi
 	for x in [-9.0, 0.0, 9.0]:
 		_box(parent, pos + Vector3(x, 1.7, -size.z * 0.55), Vector3(6.0, 3.0, 0.14), Color("354a50"), false)
 	BusVisual.label(parent, "СКЛАД / ЛОГИСТИКА", pos + Vector3(0, 5.4, -size.z * 0.60), PI, 0.003)
+
+static func _build_auto_service(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("8f8f92"))
+	_add_window_band(building, size)
+	_box(parent, pos + Vector3(0, 1.4, -size.z * 0.55), Vector3(size.x * 0.5, 2.8, 0.12), Color("2f3436"), false)
+	_box(parent, pos + Vector3(size.x * 0.3, size.y + 0.2, 0), Vector3(1.2, 0.3, 1.2), Color("596461"), false)
+	BusVisual.label(parent, "АВТОСЕРВИС", pos + Vector3(0, size.y + 0.6, -size.z * 0.56), PI, 0.0035)
+
+static func _build_mall(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("bcb7a4"))
+	_add_window_band(building, size)
+	_box(parent, pos + Vector3(0, size.y * 0.82, -size.z * 0.53), Vector3(size.x * 0.9, size.y * 0.5, 0.2), Color("46707a"), false)
+	_box(parent, pos + Vector3(0, size.y + 0.3, 0), Vector3(size.x + 1.4, 0.6, size.z + 1.4), Color("5a625d"), false)
+	BusVisual.label(parent, "ТЦ «РОДИНА»", pos + Vector3(0, 4.6, -size.z * 0.63), PI, 0.0038)
+
+static func _build_sports_hall(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("7d8a76"))
+	_add_window_band(building, size)
+	var roof := _box(parent, pos + Vector3(0, size.y + 0.5, 0), Vector3(size.x + 0.6, 0.9, size.z + 0.6), Color("4a5a4d"), false)
+	roof.rotation.x = 0.06
+	BusVisual.label(parent, "СПОРТКОМПЛЕКС «ТРУД»", pos + Vector3(0, size.y + 1.4, -size.z * 0.55), PI, 0.0032)
 
 static func _add_window_band(building: Node3D, size: Vector3) -> void:
 	for child in building.get_children():
@@ -621,12 +648,18 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 	var balconies: Array=[]
 	var doors: Array=[]
 	var rooftop_units: Array=[]
+	var penthouses: Array=[]
 	for entry_index in range(front_entries.size()):
 		var e: Dictionary = front_entries[entry_index]
 		walks.append({"size":Vector3(e.size.x+3,0.08,e.size.z+3),"position":Vector3(e.position.x,0.04,e.position.z),"y_rot":0.0})
 		roofs.append({"size":Vector3(e.size.x+0.25,0.18,e.size.z+0.25),"position":e.position+Vector3(0,e.size.y/2.0,0),"y_rot":0.0})
 		if entry_index % 3 == 0:
 			rooftop_units.append({"size": Vector3(3.6, 1.2, 2.5), "position": e.position + Vector3(e.size.x * 0.18, e.size.y / 2.0 + 0.7, 0), "y_rot": 0.0})
+		# A stepped-back penthouse on roughly one building in nine breaks the
+		# flat-roof skyline rhythm without touching placement/collision at all
+		# - purely a taller box sitting on a footprint already approved above.
+		if entry_index % 9 == 4 and e.size.y >= 15.0:
+			penthouses.append({"size": Vector3(e.size.x * 0.55, 4.0, e.size.z * 0.55), "position": e.position + Vector3(0, e.size.y / 2.0 + 2.0, 0), "y_rot": 0.0})
 		if e.size.x >= e.size.z:
 			var balcony_x: float = e.position.x + e.size.x * 0.23
 			for facade_side: float in [-1.0, 1.0]:
@@ -650,6 +683,7 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 	_multimesh_boxes(parent,"ApartmentFootpaths",CityMaterials.surface("paving"),walks)
 	_multimesh_boxes(parent,"RoofCapsAndCanopies",BusVisual.material(Color("697167")),roofs)
 	_multimesh_boxes(parent,"RoofEquipment",BusVisual.material(Color("59615e")),rooftop_units)
+	_multimesh_boxes(parent,"Penthouses",CityMaterials.facade(Color("9a9384")),penthouses)
 	_multimesh_boxes(parent,"BalconyPanels",BusVisual.material(Color("899184")),balconies)
 	_multimesh_boxes(parent,"EntranceDoors",BusVisual.material(Color("3d5851")),doors)
 
@@ -848,7 +882,13 @@ static func _place_city_block(parent: Node3D, pos: Vector3, size: Vector3, reser
 		if lot.intersects(rect):
 			return
 	occupied.append(lot)
-	var colors := [Color("aba699"),Color("929f9d"),Color("ad9a89"),Color("959aa6"),Color("b5ae99")]
+	# A wider, less uniform palette than the original five tones - panel
+	# blocks, brick and a couple of cooler modern-renovation colors mixed in
+	# so a long street doesn't read as the same building copy-pasted.
+	var colors := [
+		Color("aba699"), Color("929f9d"), Color("ad9a89"), Color("959aa6"), Color("b5ae99"),
+		Color("a8795f"), Color("8a9384"), Color("c2a87c"), Color("7f8a94"), Color("b09280"),
+	]
 	var center := pos+Vector3(0,size.y/2,0)
 	entries.append({"size":size,"position":center,"y_rot":0.0,"color":colors[rng.randi()%colors.size()]})
 	_invisible_collider(parent,center,size)

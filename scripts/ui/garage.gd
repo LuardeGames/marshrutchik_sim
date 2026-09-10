@@ -81,7 +81,7 @@ func _refresh_condition() -> void:
 
 func _build_vehicles() -> void:
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", UITheme.panel_style())
+	panel.add_theme_stylebox_override("panel", UITheme.accent_panel_style())
 	panel.custom_minimum_size = Vector2(0, 300)
 	add_child(panel)
 	panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_MINSIZE, 24)
@@ -150,7 +150,7 @@ func _refresh_vehicles() -> void:
 
 func _build_upgrades() -> void:
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", UITheme.panel_style())
+	panel.add_theme_stylebox_override("panel", UITheme.accent_panel_style(UITheme.COLOR_PANEL, UITheme.COLOR_ACCENT_2))
 	panel.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	panel.position = Vector2(24, 426)
 	panel.anchor_right = 1.0

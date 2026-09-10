@@ -18,9 +18,12 @@ var steer_angle: float = 0.0
 var doors_open: bool = false
 var passengers_aboard: int = 0
 
-const STEER_RATE := 2.4
+## Slower than a car's rack-and-pinion on purpose: a loaded minibus takes a
+## beat to lean into a turn instead of snapping the wheel instantly, which is
+## most of what made the bus feel "reactive"/twitchy rather than heavy.
+const STEER_RATE := 1.35
 const STEER_MAX := 0.6
-const MAX_TURN_RATE := 1.15 # rad/s at full lock, low speed (~66°/s)
+const MAX_TURN_RATE := 0.78 # rad/s at full lock, low speed (~45°/s)
 const GRAVITY := 18.0
 const BODY_LEAN_MAX := 0.12
 const COMFORT_CHECK_COOLDOWN := 0.35
@@ -94,15 +97,22 @@ func _handle_input(delta: float) -> void:
 	var handbrake := InputState.get_handbrake()
 
 	if throttle > 0.0 and brake <= 0.0:
-		speed += acceleration * delta
+		# Power taper: a loaded minibus keeps pulling near-flat off the line but
+		# runs out of breath well before top speed, instead of accelerating at
+		# a constant rate all the way there like a go-kart. This is most of
+		# what "тяжёлая" driving feel actually is - the mid-range pull fades.
+		var speed_ratio_now: float = clamp(speed / max(max_speed, 0.01), 0.0, 1.0)
+		var power_taper: float = lerp(1.0, 0.35, speed_ratio_now)
+		speed += acceleration * power_taper * delta
 	elif brake > 0.0:
 		if speed > 0.0:
 			speed = maxf(0.0, speed - brake_force * delta)
 		else:
 			speed -= (acceleration * 0.6) * delta
 	else:
-		# engine braking / rolling friction
-		speed = move_toward(speed, 0.0, acceleration * 0.5 * delta)
+		# engine braking / rolling friction - noticeably duller than the old
+		# 0.5x factor so the bus coasts on, another piece of feeling heavy.
+		speed = move_toward(speed, 0.0, acceleration * 0.32 * delta)
 
 	if handbrake:
 		speed = move_toward(speed, 0.0, brake_force * 1.6 * delta)

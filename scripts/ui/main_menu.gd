@@ -53,7 +53,7 @@ func _build_content() -> void:
 	vbox.add_child(daily_label)
 
 	var stats_panel := PanelContainer.new()
-	stats_panel.add_theme_stylebox_override("panel", UITheme.panel_style())
+	stats_panel.add_theme_stylebox_override("panel", UITheme.accent_panel_style())
 	vbox.add_child(stats_panel)
 	var stats_box := HBoxContainer.new()
 	stats_box.alignment = BoxContainer.ALIGNMENT_CENTER

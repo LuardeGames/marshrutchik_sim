@@ -5,7 +5,7 @@ class_name RuleEnforcement
 
 var vehicle: VehicleController
 var route_manager: RouteManager
-var speed_limit_kmh: int = 40
+var speed_limit_kmh: int = 60
 var _previous_position := Vector3.ZERO
 var _cooldowns: Dictionary = {}
 var _road_surfaces: Array = []
@@ -13,6 +13,17 @@ var _offroad_time: float = 0.0
 
 const SPEED_TOLERANCE := 5.0
 const SIDEWALK_LIMIT := RouteDefinition.ROAD_WIDTH * 0.5 + 1.4
+## Standard RF speed limit inside a populated area (population sign)
+## PDD 10.2 - this is the default everywhere on the route, not just on
+## straights. Only actual hazards (a stop bay, a tight corner) slow it down.
+const CITY_LIMIT_KMH := 60
+## Corners on the route loop are sharp ~90 degree turns; a bus can't safely
+## carry 60 km/h into one, so the limit steps down on the approach exactly
+## like a real "turn ahead" sign would.
+const CORNER_LIMIT_KMH := 40
+const CORNER_SLOW_RADIUS := 22.0
+const STOP_LIMIT_KMH := 20
+const STOP_SLOW_RADIUS := 16.0
 
 func setup(vehicle_ref: VehicleController, route_ref: RouteManager, world: Node3D = null) -> void:
 	vehicle = vehicle_ref
@@ -33,21 +44,27 @@ func _physics_process(delta: float) -> void:
 
 func get_speed_limit_kmh() -> int:
 	if vehicle == null:
-		return 40
-	var nearest := _nearest_route_data(vehicle.global_position)
-	var limit := 40
-	if float(nearest.get("distance", 999.0)) < 18.0:
-		limit = 30
-	if _near_stop(vehicle.global_position, 16.0):
-		limit = 20
+		return CITY_LIMIT_KMH
+	var limit := CITY_LIMIT_KMH
+	if _near_corner(vehicle.global_position, CORNER_SLOW_RADIUS):
+		limit = CORNER_LIMIT_KMH
+	if _near_stop(vehicle.global_position, STOP_SLOW_RADIUS):
+		limit = STOP_LIMIT_KMH
 	speed_limit_kmh = limit
 	return limit
+
+func _near_corner(pos: Vector3, radius: float) -> bool:
+	for point in RouteDefinition.waypoints():
+		if pos.distance_to(point) < radius:
+			return true
+	return false
 
 func _check_speed() -> void:
 	var limit := get_speed_limit_kmh()
 	if vehicle.get_speed_kmh() <= float(limit) + SPEED_TOLERANCE:
 		return
-	_try_violation("speed", 28 if limit >= 30 else 40, 2.0, "Слишком быстро: лимит %d км/ч · штраф %d ₽" % [limit, 28 if limit >= 30 else 40], 4.0)
+	var fine: int = 28 if limit >= CORNER_LIMIT_KMH else 40
+	_try_violation("speed", fine, 2.0, "Слишком быстро: лимит %d км/ч · штраф %d ₽" % [limit, fine], 4.0)
 
 func _check_surface(delta: float) -> void:
 	var data := _nearest_route_data(vehicle.global_position)
