@@ -749,8 +749,8 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 	_multimesh_boxes(parent,"RoofCapsAndCanopies",BusVisual.material(Color("697167")),roofs)
 	_multimesh_boxes(parent,"RoofEquipment",BusVisual.material(Color("59615e")),rooftop_units)
 	_multimesh_boxes(parent,"Penthouses",CityMaterials.facade(Color("9a9384")),penthouses)
-	_multimesh_boxes(parent,"BalconyPanels",BusVisual.material(Color("899184")),balconies)
-	_multimesh_boxes(parent,"EntranceDoors",BusVisual.material(Color("3d5851")),doors)
+	_multimesh_boxes(parent,"BalconyPanels",BusVisual.material(Color("899184"), 0.35, 0.5),balconies)
+	_multimesh_boxes(parent,"EntranceDoors",BusVisual.material(Color("3d5851"), 0.2, 0.45),doors)
 
 static func _reserve_street(reserved: Array[Rect2], start: Vector3, finish: Vector3) -> void:
 	var part_count := maxi(1, ceili(start.distance_to(finish) / 12.0))
@@ -1014,11 +1014,11 @@ static func _build_pocket_gardens(parent: Node3D) -> void:
 	_multimesh_boxes(parent, "GardenSeats", BusVisual.material(Color("735442")), seats)
 	_multimesh_boxes(parent, "CourtyardTrees", BusVisual.material(Color("694c38")), tree_trunks)
 	_multimesh_boxes(parent, "CourtyardCrowns", BusVisual.material(Color("4d6d47")), tree_crowns)
-	_multimesh_boxes(parent, "ParkedCarBodies", BusVisual.material(Color("6d7875")), parked_cars)
-	_multimesh_boxes(parent, "ParkedCarWindows", BusVisual.material(Color("34484c")), parked_windows)
+	_multimesh_boxes(parent, "ParkedCarBodies", BusVisual.material(Color("6d7875"), 0.15, 0.42), parked_cars)
+	_multimesh_boxes(parent, "ParkedCarWindows", BusVisual.material(Color("34484c"), 0.0, 0.12), parked_windows)
 	_multimesh_boxes(parent, "GarageRows", CityMaterials.surface("concrete"), garage_bodies)
-	_multimesh_boxes(parent, "GarageRoofs", BusVisual.material(Color("555d5c")), garage_roofs)
-	_multimesh_boxes(parent, "GarageDoors", BusVisual.material(Color("48605e")), garage_doors)
+	_multimesh_boxes(parent, "GarageRoofs", BusVisual.material(Color("555d5c"), 0.4, 0.55), garage_roofs)
+	_multimesh_boxes(parent, "GarageDoors", BusVisual.material(Color("48605e"), 0.5, 0.5), garage_doors)
 
 static func _collect_occupied(node: Node, occupied: Array[Rect2]) -> void:
 	if node.name == "GroundBody":

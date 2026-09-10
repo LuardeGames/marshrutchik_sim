@@ -70,6 +70,8 @@ func _build() -> void:
 	pole.position = Vector3(0, 1.7, 0)
 	var pole_mat := StandardMaterial3D.new()
 	pole_mat.albedo_color = Color(0.15, 0.15, 0.15)
+	pole_mat.metallic = 0.5
+	pole_mat.roughness = 0.4
 	pole.material_override = pole_mat
 	add_child(pole)
 

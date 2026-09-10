@@ -5,8 +5,11 @@ static func build(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	var root := Node3D.new()
 	root.name = "CISStreetDetails"
 	parent.add_child(root)
-	var metal := BusVisual.material(Color("626960"))
-	var wood := BusVisual.material(Color("735442"))
+	# Weathered painted-steel poles/railings read as shiny plastic at the
+	# default flat roughness - a bit of metallic and a lower roughness gives
+	# them a dull worn-metal look without going full mirror-chrome.
+	var metal := BusVisual.material(Color("626960"), 0.45, 0.4)
+	var wood := BusVisual.material(Color("735442"), 0.0, 0.78)
 	var poles: Array = []
 	var arms: Array = []
 	var crossings: Array=[]
@@ -120,9 +123,9 @@ static func _parked_car(parent: Node3D, pos: Vector3, direction: Vector3, color:
 	car.position = pos
 	car.rotation.y = atan2(direction.x, direction.z)
 	parent.add_child(car)
-	BusVisual.box(car, Vector3(0, 0.42, 0), Vector3(1.55, 0.55, 3.1), BusVisual.material(color))
-	BusVisual.box(car, Vector3(0, 0.82, -0.10), Vector3(1.25, 0.35, 1.45), BusVisual.material(Color("36484d"), 0.1))
-	BusVisual.box(car, Vector3(0, 0.36, -1.58), Vector3(1.62, 0.13, 0.08), BusVisual.material(Color("e0bf69")))
+	BusVisual.box(car, Vector3(0, 0.42, 0), Vector3(1.55, 0.55, 3.1), BusVisual.material(color, 0.15, 0.42))
+	BusVisual.box(car, Vector3(0, 0.82, -0.10), Vector3(1.25, 0.35, 1.45), BusVisual.material(Color("36484d"), 0.0, 0.12))
+	BusVisual.box(car, Vector3(0, 0.36, -1.58), Vector3(1.62, 0.13, 0.08), BusVisual.material(Color("e0bf69"), 0.6, 0.3))
 	WorldBuilder._invisible_collider(car, Vector3(0, 0.65, 0), Vector3(1.65, 1.3, 3.2))
 
 static func _build_sidewalk_props(root: Node3D, waypoints: Array[Vector3]) -> void:
@@ -149,7 +152,7 @@ static func _street_prop(root: Node3D, pos: Vector3, angle: float, kind: int, rn
 	prop.position = pos
 	prop.rotation.y = angle
 	root.add_child(prop)
-	var metal := BusVisual.material(Color("596461"))
+	var metal := BusVisual.material(Color("596461"), 0.45, 0.4)
 	var green_colors: Array[Color] = [Color("58724b"), Color("70865a"), Color("466a4f")]
 	var green: Color = green_colors[rng.randi_range(0, 2)]
 	match kind:

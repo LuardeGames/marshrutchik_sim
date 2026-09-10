@@ -2,10 +2,10 @@ extends RefCounted
 class_name BusVisual
 ## Original mesh-built GAZelle 3221 / PAZ 3205 silhouettes. Front is -Z.
 ## All views (player, rival, garage) use this same visual, without physics.
-static func material(color: Color, metallic: float = 0.0) -> StandardMaterial3D:
+static func material(color: Color, metallic: float = 0.0, roughness: float = 0.68) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = color
-	mat.roughness = 0.68
+	mat.roughness = roughness
 	mat.metallic = metallic
 	return mat
 
@@ -41,11 +41,17 @@ static func build(parent: Node3D, d: VehicleDefinition) -> Dictionary:
 	paint.shader=preload("res://assets/materials/coachwork.gdshader")
 	paint.set_shader_parameter("paint",d.body_color)
 	var cream := material(d.body_color.lightened(0.12), 0.1)
-	var dark := material(Color("252c2e"))
-	var glass := material(Color("36535f"), 0.28)
-	var trim := material(d.accent_color)
-	var chrome := material(Color("9babad"), 0.65)
-	var rubber := material(Color("171c20"))
+	# Was a flat roughness=0.68 across the board regardless of metallic, so
+	# "chrome" (high metallic) still looked like dull grey plastic instead of
+	# shiny metal, and "glass" (metallic on top of that) looked like tinted
+	# plastic instead of glazing. Roughness now actually varies per material:
+	# chrome reads as shiny metal, glass as smooth and reflective but
+	# non-metallic, rubber stays flat matte, trim a semi-gloss plastic.
+	var dark := material(Color("252c2e"), 0.0, 0.55)
+	var glass := material(Color("36535f"), 0.0, 0.12)
+	var trim := material(d.accent_color, 0.0, 0.5)
+	var chrome := material(Color("9babad"), 0.85, 0.22)
+	var rubber := material(Color("171c20"), 0.0, 0.92)
 	var front := -l/2.0
 	var rear := l/2.0
 	# Rounded cross sections with a narrower roof; avoids a scaled generic van.
