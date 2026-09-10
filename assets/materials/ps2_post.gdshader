@@ -6,11 +6,13 @@ shader_type canvas_item;
 // PS2-era GPU/CRT rather than a literal shader port.
 
 uniform sampler2D screen_tex : hint_screen_texture, filter_nearest, repeat_disable;
-uniform float dither_strength : hint_range(0.0, 1.0) = 0.4;
-uniform float color_levels : hint_range(4.0, 64.0) = 18.0;
-uniform float vignette_strength : hint_range(0.0, 1.0) = 0.32;
-uniform float grain_strength : hint_range(0.0, 0.2) = 0.03;
-uniform float scanline_strength : hint_range(0.0, 0.3) = 0.07;
+// Was tuned so subtle it was nearly invisible in play - pushed up across the
+// board so the retro/CRT read is unmistakable instead of just a faint haze.
+uniform float dither_strength : hint_range(0.0, 1.0) = 0.6;
+uniform float color_levels : hint_range(4.0, 64.0) = 13.0;
+uniform float vignette_strength : hint_range(0.0, 1.0) = 0.4;
+uniform float grain_strength : hint_range(0.0, 0.2) = 0.07;
+uniform float scanline_strength : hint_range(0.0, 0.3) = 0.14;
 
 const float BAYER[16] = float[16](
 	0.0, 8.0, 2.0, 10.0,
