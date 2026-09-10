@@ -81,8 +81,8 @@ static func _build_environment(parent: Node3D) -> void:
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	# Flattened toward neutral grey (was a noticeably blue-ish "bac0c5") -
 	# the mood is an overcast, drab CIS city, not a cool clear-sky bounce.
-	env.ambient_light_color = Color("b3b3b2")
-	env.ambient_light_energy = 0.62
+	env.ambient_light_color = Color("9a9a99")
+	env.ambient_light_energy = 0.46
 	env.fog_enabled = true
 	env.fog_light_color = Color("999999")
 	env.fog_density = 0.00085
@@ -96,7 +96,10 @@ static func _build_environment(parent: Node3D) -> void:
 	env.ssao_enabled = false
 	env.glow_enabled = false
 	env.adjustment_enabled = true
-	env.adjustment_brightness = 0.98
+	# Buildings/ground were still reading brighter than the grey sky behind
+	# them - the ambient+sun stack was overpowering the overcast mood the
+	# sky shader sets. Pulled the whole ground-level exposure down a notch.
+	env.adjustment_brightness = 0.88
 	# A gentler contrast/saturation than an earlier pass - "серость":
 	# drab and hazy, not a punchy console crunch that fights the overcast
 	# mood the sky/fog are already going for.
@@ -112,7 +115,7 @@ static func _build_environment(parent: Node3D) -> void:
 	# black - matches how shadows actually look on a grey day.
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-38, -50, 0)
-	sun.light_energy = 0.8
+	sun.light_energy = 0.62
 	sun.shadow_enabled = true
 	sun.shadow_blur = 4.0
 	sun.shadow_opacity = 0.6 # soft/hazy, never a stark black cutout
@@ -858,6 +861,16 @@ static func _add_yard_driveway(pos: Vector3, surfaces: Array, driveways: Array) 
 	var mid := pos + dir * (best_dist * 0.5)
 	driveways.append({"size": Vector3(4.4, 0.09, best_dist + 4.0), "position": Vector3(mid.x, 0.045, mid.z), "y_rot": atan2(dir.x, dir.z)})
 
+## A handful of small colored blocks scattered over a green planter/hedge -
+## turns a flat mono-green box into a readable CIS-courtyard flowerbed
+## (клумба) instead of just more undifferentiated grass-green.
+const FLOWER_COLORS := [Color("c94f4f"), Color("d9b23c"), Color("c15fa0"), Color("d97f3c")]
+static func _flower_cluster(flowers: Array, center: Vector3, seed_i: int) -> void:
+	var offsets := [Vector3(-0.9,0,-0.5), Vector3(0.7,0,0.5), Vector3(0.05,0,0.85), Vector3(-0.45,0,0.65), Vector3(0.85,0,-0.35)]
+	for i in range(offsets.size()):
+		var color: Color = FLOWER_COLORS[(seed_i + i) % FLOWER_COLORS.size()]
+		flowers.append({"size": Vector3(0.24, 0.22, 0.24), "position": center + offsets[i] + Vector3(0, 0.04, 0), "y_rot": 0.0, "color": color})
+
 ## Turns leftover lots into readable courtyards instead of scattering the
 ## same tiny planter across every empty patch.
 static func _build_pocket_gardens(parent: Node3D) -> void:
@@ -869,6 +882,7 @@ static func _build_pocket_gardens(parent: Node3D) -> void:
 	var parking_lines: Array = []
 	var planters: Array = []
 	var foliage: Array = []
+	var flowers: Array = []
 	var seats: Array = []
 	var tree_trunks: Array = []
 	var tree_crowns: Array = []
@@ -920,6 +934,7 @@ static func _build_pocket_gardens(parent: Node3D) -> void:
 						var bed := pos + Vector3(side * 5.5, 0.22, 5.4)
 						planters.append({"size": Vector3(3.5, 0.44, 2.2), "position": bed, "y_rot": 0.0})
 						foliage.append({"size": Vector3(3.1, 0.72, 1.8), "position": bed + Vector3(0, 0.54, 0), "y_rot": 0.0})
+						_flower_cluster(flowers, bed + Vector3(0, 0.92, 0), grid_x + grid_z)
 						seats.append({"size": Vector3(2.4, 0.45, 0.65), "position": pos + Vector3(side * 4.6, 0.225, -2.3), "y_rot": 0.0})
 						var tree_pos := pos + Vector3(side * 5.8, 0, -5.5)
 						tree_trunks.append({"size": Vector3(0.7, 2.2, 0.7), "position": tree_pos + Vector3(0, 1.1, 0), "y_rot": 0.0})
@@ -982,6 +997,7 @@ static func _build_pocket_gardens(parent: Node3D) -> void:
 				_:
 					planters.append({"size": Vector3(2.6, 0.4, 1.8), "position": pos + Vector3(0, 0.2, 0), "y_rot": 0.0})
 					foliage.append({"size": Vector3(2.2, 0.6, 1.4), "position": pos + Vector3(0, 0.5, 0), "y_rot": 0.0})
+					_flower_cluster(flowers, pos + Vector3(0, 0.85, 0), int(x) + int(z))
 			fine_count += 1
 	parent.set_meta("pocket_gardens", count)
 	parent.set_meta("pocket_gardens_fine", fine_count)
@@ -991,6 +1007,10 @@ static func _build_pocket_gardens(parent: Node3D) -> void:
 	_multimesh_boxes(parent, "ParkingLines", BusVisual.material(Color("c6c5b8")), parking_lines)
 	_multimesh_boxes(parent, "GardenBeds", CityMaterials.surface("concrete"), planters)
 	_multimesh_boxes(parent, "GardenHedges", BusVisual.material(Color("57704b")), foliage)
+	var flower_mat := StandardMaterial3D.new()
+	flower_mat.vertex_color_use_as_albedo = true
+	flower_mat.roughness = 0.85
+	_multimesh_colored_boxes(parent, "GardenFlowers", flower_mat, flowers)
 	_multimesh_boxes(parent, "GardenSeats", BusVisual.material(Color("735442")), seats)
 	_multimesh_boxes(parent, "CourtyardTrees", BusVisual.material(Color("694c38")), tree_trunks)
 	_multimesh_boxes(parent, "CourtyardCrowns", BusVisual.material(Color("4d6d47")), tree_crowns)
@@ -1032,9 +1052,13 @@ static func _place_city_block(parent: Node3D, pos: Vector3, size: Vector3, reser
 	# A wider, less uniform palette than the original five tones - panel
 	# blocks, brick and a couple of cooler modern-renovation colors mixed in
 	# so a long street doesn't read as the same building copy-pasted.
+	# Muted a notch darker - against a grey overcast sky the original palette
+	# (tuned brighter, before the ambient/sun pass below was dialed back)
+	# read as too light, like the buildings were lit from a sun that wasn't
+	# actually there.
 	var colors := [
-		Color("aba699"), Color("929f9d"), Color("ad9a89"), Color("959aa6"), Color("b5ae99"),
-		Color("a8795f"), Color("8a9384"), Color("c2a87c"), Color("7f8a94"), Color("b09280"),
+		Color("968f80"), Color("7c8988"), Color("978570"), Color("7f8390"), Color("9c9580"),
+		Color("8e6249"), Color("737d70"), Color("a68d63"), Color("6b747e"), Color("947a67"),
 	]
 	var center := pos+Vector3(0,size.y/2,0)
 	entries.append({"size":size,"position":center,"y_rot":0.0,"color":colors[rng.randi()%colors.size()]})
