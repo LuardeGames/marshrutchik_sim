@@ -73,7 +73,7 @@ static func _build_environment(parent: Node3D) -> void:
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color("bac0c5")
-	env.ambient_light_energy = 0.68
+	env.ambient_light_energy = 0.5
 	env.fog_enabled = true
 	env.fog_light_color = Color("929da3")
 	env.fog_density = 0.00065
@@ -81,27 +81,27 @@ static func _build_environment(parent: Node3D) -> void:
 	env.fog_aerial_perspective = 0.0
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.tonemap_exposure = 0.90
+	# The Compatibility renderer doesn't support screen-space AO, so this
+	# stays off - grime/contact shadow is baked into the facade/surface
+	# shaders instead (see PS2Look/CityMaterials).
 	env.ssao_enabled = false
-	env.ssao_radius = 2.0
-	env.ssao_intensity = 1.4
 	env.glow_enabled = false
-	env.glow_intensity = 0.5
-	env.glow_bloom = 0.05
-	env.glow_hdr_threshold = 1.1
 	env.adjustment_enabled = true
-	env.adjustment_brightness = 1.02
-	env.adjustment_contrast = 1.08
-	env.adjustment_saturation = 0.92
+	env.adjustment_brightness = 1.0
+	env.adjustment_contrast = 1.16
+	env.adjustment_saturation = 0.82
 	env_node.environment = env
 	parent.add_child(env_node)
 
-	# Broad cloud cover scatters sunlight; no hard direct-sun shadows.
+	# Real shadow-casting sun instead of pure flat ambient - cranked up from
+	# the old shadowless 0.2 so the shadow actually reads against the
+	# overcast ambient instead of disappearing into it.
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-38, -50, 0)
-	sun.light_energy = 0.20
-	sun.shadow_enabled = false
-	sun.shadow_blur = 1.2
-	sun.directional_shadow_max_distance = 220.0
+	sun.light_energy = 0.95
+	sun.shadow_enabled = true
+	sun.shadow_blur = 1.1
+	sun.directional_shadow_max_distance = 150.0
 	sun.light_color = Color("d4d9df")
 	parent.add_child(sun)
 
@@ -694,7 +694,11 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 	var penthouses: Array=[]
 	for entry_index in range(front_entries.size()):
 		var e: Dictionary = front_entries[entry_index]
-		walks.append({"size":Vector3(e.size.x+3,0.08,e.size.z+3),"position":Vector3(e.position.x,0.04,e.position.z),"y_rot":0.0})
+		# Wider than the building's own footprint by a real margin, not just
+		# a token strip - a narrow gap between two closely-spaced blocks is a
+		# service alley in reality, never bare grass, and this is usually
+		# enough for two neighbouring buildings' paving to meet in the middle.
+		walks.append({"size":Vector3(e.size.x+7,0.08,e.size.z+7),"position":Vector3(e.position.x,0.04,e.position.z),"y_rot":0.0})
 		roofs.append({"size":Vector3(e.size.x+0.25,0.18,e.size.z+0.25),"position":e.position+Vector3(0,e.size.y/2.0,0),"y_rot":0.0})
 		if entry_index % 3 == 0:
 			rooftop_units.append({"size": Vector3(3.6, 1.2, 2.5), "position": e.position + Vector3(e.size.x * 0.18, e.size.y / 2.0 + 0.7, 0), "y_rot": 0.0})
@@ -926,7 +930,46 @@ static func _build_pocket_gardens(parent: Node3D) -> void:
 						_invisible_collider(parent, garage_pos + Vector3(0, 1.35, 0), Vector3(5.0, 2.7, 6.5))
 					_add_yard_driveway(pos, surfaces, driveways)
 			count += 1
+	# The 22m/18x18 pass above only lands where a whole courtyard fits - most
+	# of a real gap between two 46m-spaced building rows is narrower than
+	# that and got rejected outright, so it stayed bare grass with nothing
+	# in it at all. A second, finer pass (11m step, 8x8 lot) can't fit a
+	# parking lot but can always fit a tree or a bench, so it catches
+	# everything the first pass had to skip.
+	var fine_count := 0
+	for x in range(-280, 971, 11):
+		for z in range(-770, 471, 11):
+			if (int((x + 280) / 11) + int((z + 770) / 11)) % 2 != 0:
+				continue # half-density checkerboard keeps this pass cheap and uncluttered
+			var pos := Vector3(x, 0, z)
+			var lot := Rect2(Vector2(x - 4, z - 4), Vector2(8, 8))
+			var blocked: bool = is_road_surface(pos, surfaces, 8.0)
+			for rect: Rect2 in waypoint_clearance:
+				if lot.intersects(rect):
+					blocked = true
+					break
+			for rect: Rect2 in occupied:
+				if blocked:
+					break
+				if lot.intersects(rect):
+					blocked = true
+					break
+			if blocked:
+				continue
+			occupied.append(lot)
+			match (int((x + 280) / 11) + int((z + 770) / 11) * 3) % 3:
+				0:
+					tree_trunks.append({"size": Vector3(0.6, 1.9, 0.6), "position": pos + Vector3(0, 0.95, 0), "y_rot": 0.0})
+					tree_crowns.append({"size": Vector3(3.0, 3.6, 3.0), "position": pos + Vector3(0, 3.0, 0), "y_rot": 0.0})
+				1:
+					seats.append({"size": Vector3(2.2, 0.42, 0.6), "position": pos + Vector3(0, 0.21, 0), "y_rot": deg_to_rad(90.0) if int(x) % 22 == 0 else 0.0})
+					foliage.append({"size": Vector3(1.6, 0.6, 1.4), "position": pos + Vector3(0, 0.3, 1.6), "y_rot": 0.0})
+				_:
+					planters.append({"size": Vector3(2.6, 0.4, 1.8), "position": pos + Vector3(0, 0.2, 0), "y_rot": 0.0})
+					foliage.append({"size": Vector3(2.2, 0.6, 1.4), "position": pos + Vector3(0, 0.5, 0), "y_rot": 0.0})
+			fine_count += 1
 	parent.set_meta("pocket_gardens", count)
+	parent.set_meta("pocket_gardens_fine", fine_count)
 	_multimesh_boxes(parent, "CourtyardPaths", CityMaterials.surface("paving"), courtyard_paths)
 	_multimesh_boxes(parent, "YardDriveways", CityMaterials.surface("asphalt"), driveways)
 	_multimesh_boxes(parent, "LotParking", CityMaterials.surface("asphalt"), parking_surfaces)
