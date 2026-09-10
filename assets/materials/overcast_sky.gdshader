@@ -9,6 +9,8 @@ void sky() {
  vec3 d=normalize(EYEDIR);
  vec2 uv=d.xz/(max(d.y,0.0)+0.32);
  float cloud=noise(uv*2.0)*0.58+noise(uv*4.3)*0.28+noise(uv*9.0)*0.14;
- vec3 banks=mix(vec3(0.27,0.30,0.33),vec3(0.64,0.66,0.68),smoothstep(0.12,0.87,cloud));
- COLOR=mix(vec3(0.58,0.61,0.63),banks,smoothstep(0.0,0.20,d.y));
+ // Lower ceiling and flatter, greyer bands than before - a heavier,
+ // more oppressive overcast instead of a bright hazy sky.
+ vec3 banks=mix(vec3(0.24,0.26,0.27),vec3(0.56,0.57,0.58),smoothstep(0.12,0.87,cloud));
+ COLOR=mix(vec3(0.50,0.52,0.53),banks,smoothstep(0.0,0.20,d.y));
 }

@@ -40,7 +40,7 @@ func _run() -> void:
 		var route_stops := RouteDefinition.stops(route_id)
 		_check("route %s has 6 stops" % route_id, route_stops.size() == 6)
 		_check("route %s has a usable road loop" % route_id, route_points.size() >= 12 and RouteDefinition.total_length(route_id) > 500.0)
-	var route_save := SaveManager.DEFAULT_DATA.duplicate(true)
+	var route_save: Dictionary = SaveManager.DEFAULT_DATA.duplicate(true)
 	SaveManager.data = route_save
 	_check("route 47 is available from the start", SaveManager.is_route_unlocked("route_47"))
 	_check("route 12 is locked before the first trip", not SaveManager.is_route_unlocked("route_12"))
@@ -144,7 +144,7 @@ func _run() -> void:
 	_check("trip summary has total", summary.has("total"))
 	_check("trip summary total > 0", summary.total > 0)
 	_check("trip summary has rating 1-3", summary.rating >= 1 and summary.rating <= 3)
-	var money_before_reward := SaveManager.get_money()
+	var money_before_reward: int = SaveManager.get_money()
 	_check("double reward can be requested after a trip", GameManager.claim_double_reward())
 	_check("local rewarded fallback grants exactly one extra trip total", SaveManager.get_money() == money_before_reward + int(summary.total))
 	_check("double reward cannot be claimed twice", not GameManager.claim_double_reward())

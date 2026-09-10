@@ -5,6 +5,7 @@ extends Node3D
 const HUD_SCENE := preload("res://scenes/ui/hud.tscn")
 const RULE_ENFORCEMENT_SCRIPT := preload("res://scripts/world/rule_enforcement.gd")
 const ROAD_INCIDENT_MANAGER_SCRIPT := preload("res://scripts/world/road_incident_manager.gd")
+const PS2_POST_PROCESS_SCRIPT := preload("res://scripts/ui/ps2_post_process.gd")
 
 var world: Node3D
 var vehicle: VehicleController
@@ -18,6 +19,7 @@ var incident_manager: Node
 var hud: CanvasLayer
 
 func _ready() -> void:
+	add_child(PS2_POST_PROCESS_SCRIPT.new())
 	world = Node3D.new()
 	world.name = "World"
 	add_child(world)

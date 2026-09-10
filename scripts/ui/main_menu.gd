@@ -5,6 +5,7 @@ extends Control
 ## its global class cache after a fresh clone/import.
 const SettingsOverlayScript := preload("res://scripts/ui/settings_overlay.gd")
 const MenuBackdropScript := preload("res://scripts/ui/menu_backdrop.gd")
+const PS2PostProcessScript := preload("res://scripts/ui/ps2_post_process.gd")
 
 var settings_panel: Control
 var route_info_label: Label
@@ -14,6 +15,7 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	PlatformService.mark_loading_ready()
 	_build_background()
+	add_child(PS2PostProcessScript.new())
 	_build_content()
 	_build_settings_modal()
 	AudioManager.set_engine_running(false)
@@ -53,7 +55,7 @@ func _build_content() -> void:
 	vbox.add_child(daily_label)
 
 	var stats_panel := PanelContainer.new()
-	stats_panel.add_theme_stylebox_override("panel", UITheme.panel_style())
+	stats_panel.add_theme_stylebox_override("panel", UITheme.accent_panel_style())
 	vbox.add_child(stats_panel)
 	var stats_box := HBoxContainer.new()
 	stats_box.alignment = BoxContainer.ALIGNMENT_CENTER

@@ -5,7 +5,13 @@ class_name WorldBuilder
 ## Nothing here needs an external 3D asset.
 
 const ROAD_WIDTH := RouteDefinition.ROAD_WIDTH
-const MAP_MARGIN := 300.0
+## Ground/collision extends this far past the route's own waypoints. Must
+## reach past the fixed-coordinate backdrop skyline in _build_backdrop_blocks
+## (x up to ~1049, z from -849 to 549) on every route, or those buildings
+## float over bare fog with a visible dead strip of nothing in front of them
+## - this was the single biggest "empty city" complaint. 460 clears that on
+## all three routes' waypoint bounds with room to spare.
+const MAP_MARGIN := 460.0
 
 static func build(parent: Node3D) -> Dictionary:
 	var waypoints := RouteDefinition.waypoints()
@@ -66,36 +72,44 @@ static func _build_environment(parent: Node3D) -> void:
 	sky.sky_material = sky_mat
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("bac0c5")
-	env.ambient_light_energy = 0.68
+	# Flattened toward neutral grey (was a noticeably blue-ish "bac0c5") -
+	# the mood is an overcast, drab CIS city, not a cool clear-sky bounce.
+	env.ambient_light_color = Color("b3b3b2")
+	env.ambient_light_energy = 0.62
 	env.fog_enabled = true
-	env.fog_light_color = Color("929da3")
-	env.fog_density = 0.00065
-	env.fog_sky_affect = 0.12
+	env.fog_light_color = Color("999999")
+	env.fog_density = 0.00085
+	env.fog_sky_affect = 0.16
 	env.fog_aerial_perspective = 0.0
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.tonemap_exposure = 0.90
+	# The Compatibility renderer doesn't support screen-space AO, so this
+	# stays off - grime/contact shadow is baked into the facade/surface
+	# shaders instead (see PS2Look/CityMaterials).
 	env.ssao_enabled = false
-	env.ssao_radius = 2.0
-	env.ssao_intensity = 1.4
 	env.glow_enabled = false
-	env.glow_intensity = 0.5
-	env.glow_bloom = 0.05
-	env.glow_hdr_threshold = 1.1
 	env.adjustment_enabled = true
-	env.adjustment_brightness = 1.02
-	env.adjustment_contrast = 1.08
-	env.adjustment_saturation = 0.92
+	env.adjustment_brightness = 0.98
+	# A gentler contrast/saturation than an earlier pass - "серость":
+	# drab and hazy, not a punchy console crunch that fights the overcast
+	# mood the sky/fog are already going for.
+	env.adjustment_contrast = 1.04
+	env.adjustment_saturation = 0.68
 	env_node.environment = env
 	parent.add_child(env_node)
 
-	# Broad cloud cover scatters sunlight; no hard direct-sun shadows.
+	# Real shadow-casting sun, but soft: an overcast sky scatters sunlight
+	# through cloud cover, so its shadow should be a soft, hazy smudge, not
+	# a crisp hard-sun edge. A heavy shadow_blur plus lifting ambient back up
+	# (vs. an earlier, punchier pass) keeps the shadow soft and never pure
+	# black - matches how shadows actually look on a grey day.
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-38, -50, 0)
-	sun.light_energy = 0.20
-	sun.shadow_enabled = false
-	sun.shadow_blur = 1.2
-	sun.directional_shadow_max_distance = 220.0
+	sun.light_energy = 0.8
+	sun.shadow_enabled = true
+	sun.shadow_blur = 4.0
+	sun.shadow_opacity = 0.6 # soft/hazy, never a stark black cutout
+	sun.directional_shadow_max_distance = 150.0
 	sun.light_color = Color("d4d9df")
 	parent.add_child(sun)
 
@@ -197,6 +211,37 @@ static func _build_road(parent: Node3D, waypoints: Array[Vector3]) -> void:
 			var sidewalk_pos: Vector3 = mid + perp * side * (ROAD_WIDTH / 2.0 + 1.9)
 			sidewalk_pos.y = 0.05
 			sidewalk_entries.append({"size": Vector3(3.2, 0.1, maxf(1.0,a.distance_to(b)-ROAD_WIDTH)), "position": sidewalk_pos, "y_rot": angle})
+
+	# Corner fill: each edge's curb/sidewalk above stops ROAD_WIDTH/2 short of
+	# every vertex on purpose, so two edges meeting at an angle never need a
+	# mitred join - but with nothing placed in that gap it read as a visibly
+	# broken curb at every turn. Cap it with a box sized to the actual offset
+	# between the incoming and outgoing edge's curb/sidewalk line on each
+	# side; degenerates to a tiny corner dot where an edge runs straight
+	# through (incoming and outgoing directions equal).
+	var curb_offset := ROAD_WIDTH / 2.0 + 0.2
+	var walk_offset := ROAD_WIDTH / 2.0 + 1.9
+	for i in range(n):
+		var prev_pt: Vector3 = waypoints[(i - 1 + n) % n]
+		var cur_pt: Vector3 = waypoints[i]
+		var next_pt: Vector3 = waypoints[(i + 1) % n]
+		var in_dir := (cur_pt - prev_pt).normalized()
+		var out_dir := (next_pt - cur_pt).normalized()
+		var in_perp := Vector3(-in_dir.z, 0, in_dir.x)
+		var out_perp := Vector3(-out_dir.z, 0, out_dir.x)
+		for side in [-1.0, 1.0]:
+			var p_in: Vector3 = cur_pt + in_perp * side * curb_offset
+			var p_out: Vector3 = cur_pt + out_perp * side * curb_offset
+			var corner := (p_in + p_out) * 0.5
+			var gap := Vector3(absf(p_out.x - p_in.x) + 0.35, 0.0, absf(p_out.z - p_in.z) + 0.35)
+			if gap.x > 0.4 and gap.z > 0.4:
+				curb_entries.append({"size": Vector3(gap.x, 0.22, gap.z), "position": Vector3(corner.x, 0.11, corner.z), "y_rot": 0.0})
+			var pw_in: Vector3 = cur_pt + in_perp * side * walk_offset
+			var pw_out: Vector3 = cur_pt + out_perp * side * walk_offset
+			var corner_w := (pw_in + pw_out) * 0.5
+			var gap_w := Vector3(absf(pw_out.x - pw_in.x) + 3.2, 0.0, absf(pw_out.z - pw_in.z) + 3.2)
+			if gap_w.x > 0.4 and gap_w.z > 0.4:
+				sidewalk_entries.append({"size": Vector3(gap_w.x, 0.1, gap_w.z), "position": Vector3(corner_w.x, 0.05, corner_w.z), "y_rot": 0.0})
 
 	_multimesh_boxes(road_root, "RoadStrips", asphalt, road_entries)
 	_multimesh_boxes(road_root, "LaneDashes", line_mat, dash_entries)
@@ -456,6 +501,15 @@ static func _build_city_variety(parent: Node3D) -> void:
 	_build_cinema(parent, Vector3(225, 0, 245), Vector3(26, 8, 18))
 	_build_market_hall(parent, Vector3(-185, 0, -175), Vector3(26, 8, 18))
 	_build_warehouse(parent, Vector3(720, 0, -500), Vector3(30, 8, 22))
+	# Extra one-off silhouettes so the drive doesn't repeat the same handful
+	# of shapes - placed well clear of every route's waypoints and the fixed
+	# traffic loops (checked against all three route layouts, not just 47).
+	_build_auto_service(parent, Vector3(-260, 0, -520), Vector3(20, 6, 14))
+	# NOT (300,-520): that sits directly on the fixed north-south connecting
+	# street at x=300 (z -600..-460) in _build_filler's `links` - confirmed
+	# by tests/city_roads_test.gd finding 10 blocked lane samples there.
+	_build_mall(parent, Vector3(580, 0, -650), Vector3(34, 9, 20))
+	_build_sports_hall(parent, Vector3(650, 0, 245), Vector3(28, 9, 20))
 
 static func _build_brick_house(parent: Node3D, pos: Vector3, size: Vector3, y_rot: float) -> void:
 	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("a86e55"), true, y_rot)
@@ -516,6 +570,27 @@ static func _build_warehouse(parent: Node3D, pos: Vector3, size: Vector3) -> voi
 	for x in [-9.0, 0.0, 9.0]:
 		_box(parent, pos + Vector3(x, 1.7, -size.z * 0.55), Vector3(6.0, 3.0, 0.14), Color("354a50"), false)
 	BusVisual.label(parent, "СКЛАД / ЛОГИСТИКА", pos + Vector3(0, 5.4, -size.z * 0.60), PI, 0.003)
+
+static func _build_auto_service(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("8f8f92"))
+	_add_window_band(building, size)
+	_box(parent, pos + Vector3(0, 1.4, -size.z * 0.55), Vector3(size.x * 0.5, 2.8, 0.12), Color("2f3436"), false)
+	_box(parent, pos + Vector3(size.x * 0.3, size.y + 0.2, 0), Vector3(1.2, 0.3, 1.2), Color("596461"), false)
+	BusVisual.label(parent, "АВТОСЕРВИС", pos + Vector3(0, size.y + 0.6, -size.z * 0.56), PI, 0.0035)
+
+static func _build_mall(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("bcb7a4"))
+	_add_window_band(building, size)
+	_box(parent, pos + Vector3(0, size.y * 0.82, -size.z * 0.53), Vector3(size.x * 0.9, size.y * 0.5, 0.2), Color("46707a"), false)
+	_box(parent, pos + Vector3(0, size.y + 0.3, 0), Vector3(size.x + 1.4, 0.6, size.z + 1.4), Color("5a625d"), false)
+	BusVisual.label(parent, "ТЦ «РОДИНА»", pos + Vector3(0, 4.6, -size.z * 0.63), PI, 0.0038)
+
+static func _build_sports_hall(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("7d8a76"))
+	_add_window_band(building, size)
+	var roof := _box(parent, pos + Vector3(0, size.y + 0.5, 0), Vector3(size.x + 0.6, 0.9, size.z + 0.6), Color("4a5a4d"), false)
+	roof.rotation.x = 0.06
+	BusVisual.label(parent, "СПОРТКОМПЛЕКС «ТРУД»", pos + Vector3(0, size.y + 1.4, -size.z * 0.55), PI, 0.0032)
 
 static func _add_window_band(building: Node3D, size: Vector3) -> void:
 	for child in building.get_children():
@@ -601,10 +676,13 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 				var pos: Vector3 = a.lerp(b, (float(i) + 0.5) / float(count)) + perp * side * 22.0
 				var size := Vector3(18, float(rng.randi_range(3, 6)) * 3, 10) if absf(dir.x) > 0.5 else Vector3(10, float(rng.randi_range(3, 6)) * 3, 18)
 				_place_city_block(parent, pos, size, reserved, occupied, front_entries, rng)
-	# Fill the interior and extend beyond the outer avenue. Alternating slab
-	# orientation leaves connected courtyards instead of isolated towers.
-	for x in range(-280, 921, 46):
-		for z in range(-720, 421, 46):
+	# Fill the interior and extend beyond the outer avenue - out to just
+	# short of the fixed backdrop skyline (see MAP_MARGIN) so that band isn't
+	# bare grass between the built-up city and the distant silhouette.
+	# Alternating slab orientation leaves connected courtyards instead of
+	# isolated towers.
+	for x in range(-280, 971, 46):
+		for z in range(-770, 471, 46):
 			var pos := Vector3(x,0,z)
 			var size := Vector3(32,float(rng.randi_range(5,12))*3,16) if (x/46+z/46)%2==0 else Vector3(16,float(rng.randi_range(5,12))*3,32)
 			_place_city_block(parent,pos,size,reserved,occupied,front_entries,rng)
@@ -621,12 +699,22 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 	var balconies: Array=[]
 	var doors: Array=[]
 	var rooftop_units: Array=[]
+	var penthouses: Array=[]
 	for entry_index in range(front_entries.size()):
 		var e: Dictionary = front_entries[entry_index]
-		walks.append({"size":Vector3(e.size.x+3,0.08,e.size.z+3),"position":Vector3(e.position.x,0.04,e.position.z),"y_rot":0.0})
+		# Wider than the building's own footprint by a real margin, not just
+		# a token strip - a narrow gap between two closely-spaced blocks is a
+		# service alley in reality, never bare grass, and this is usually
+		# enough for two neighbouring buildings' paving to meet in the middle.
+		walks.append({"size":Vector3(e.size.x+7,0.08,e.size.z+7),"position":Vector3(e.position.x,0.04,e.position.z),"y_rot":0.0})
 		roofs.append({"size":Vector3(e.size.x+0.25,0.18,e.size.z+0.25),"position":e.position+Vector3(0,e.size.y/2.0,0),"y_rot":0.0})
 		if entry_index % 3 == 0:
 			rooftop_units.append({"size": Vector3(3.6, 1.2, 2.5), "position": e.position + Vector3(e.size.x * 0.18, e.size.y / 2.0 + 0.7, 0), "y_rot": 0.0})
+		# A stepped-back penthouse on roughly one building in nine breaks the
+		# flat-roof skyline rhythm without touching placement/collision at all
+		# - purely a taller box sitting on a footprint already approved above.
+		if entry_index % 9 == 4 and e.size.y >= 15.0:
+			penthouses.append({"size": Vector3(e.size.x * 0.55, 4.0, e.size.z * 0.55), "position": e.position + Vector3(0, e.size.y / 2.0 + 2.0, 0), "y_rot": 0.0})
 		if e.size.x >= e.size.z:
 			var balcony_x: float = e.position.x + e.size.x * 0.23
 			for facade_side: float in [-1.0, 1.0]:
@@ -650,6 +738,7 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 	_multimesh_boxes(parent,"ApartmentFootpaths",CityMaterials.surface("paving"),walks)
 	_multimesh_boxes(parent,"RoofCapsAndCanopies",BusVisual.material(Color("697167")),roofs)
 	_multimesh_boxes(parent,"RoofEquipment",BusVisual.material(Color("59615e")),rooftop_units)
+	_multimesh_boxes(parent,"Penthouses",CityMaterials.facade(Color("9a9384")),penthouses)
 	_multimesh_boxes(parent,"BalconyPanels",BusVisual.material(Color("899184")),balconies)
 	_multimesh_boxes(parent,"EntranceDoors",BusVisual.material(Color("3d5851")),doors)
 
@@ -738,6 +827,30 @@ static func is_road_surface(pos: Vector3, surfaces: Array, margin: float = 0.0) 
 			return true
 	return false
 
+## A CIS courtyard's parking/garage row is never an island in the grass -
+## it hangs off a real проезд from the street. Draws a straight asphalt
+## strip from a yard lot to the nearest registered road's centerline (skips
+## it if that road is implausibly far away, rather than drawing a driveway
+## across half the district).
+static func _add_yard_driveway(pos: Vector3, surfaces: Array, driveways: Array) -> void:
+	var best_dist := INF
+	var best_point := pos
+	for surface: Dictionary in surfaces:
+		var a: Vector3 = surface["a"]
+		var b: Vector3 = surface["b"]
+		var point := Geometry3D.get_closest_point_to_segment(pos, a, b)
+		var dist := pos.distance_to(point)
+		if dist < best_dist:
+			best_dist = dist
+			best_point = point
+	if best_dist < 3.0 or best_dist > 42.0:
+		return
+	var to_road: Vector3 = best_point - pos
+	to_road.y = 0.0
+	var dir := to_road.normalized()
+	var mid := pos + dir * (best_dist * 0.5)
+	driveways.append({"size": Vector3(4.4, 0.09, best_dist + 4.0), "position": Vector3(mid.x, 0.045, mid.z), "y_rot": atan2(dir.x, dir.z)})
+
 ## Turns leftover lots into readable courtyards instead of scattering the
 ## same tiny planter across every empty patch.
 static func _build_pocket_gardens(parent: Node3D) -> void:
@@ -757,21 +870,40 @@ static func _build_pocket_gardens(parent: Node3D) -> void:
 	var garage_bodies: Array = []
 	var garage_roofs: Array = []
 	var garage_doors: Array = []
+	var driveways: Array = []
 	var count: int = 0
-	for x in range(-120, 741, 22):
-		for z in range(-580, 261, 22):
+	# Covers the same footprint as the building fill grid (see MAP_MARGIN /
+	# the interior fill loop above) - this used to stop at the old, smaller
+	# city bounds, so most of the newer, wider city was just bare grass
+	# around the buildings with no yards, paths or playgrounds at all.
+	# The building-fill pass keeps a 20m clearance box around every route
+	# waypoint (corners need room to turn) but that reservation is a plain
+	# Rect2, never a real collider, so _collect_occupied() below can't see
+	# it - a pocket-garden prop (garage, parked car) could land right on a
+	# corner's swept path. Rebuild that same clearance here explicitly.
+	var waypoint_clearance: Array[Rect2] = []
+	for point in RouteDefinition.waypoints():
+		waypoint_clearance.append(Rect2(Vector2(point.x - 20.0, point.z - 20.0), Vector2(40.0, 40.0)))
+	for x in range(-280, 971, 22):
+		for z in range(-770, 471, 22):
 			var pos := Vector3(x, 0, z)
 			var lot := Rect2(Vector2(x - 9, z - 9), Vector2(18, 18))
 			var blocked: bool = is_road_surface(pos, surfaces, 13.0)
+			for rect: Rect2 in waypoint_clearance:
+				if lot.intersects(rect):
+					blocked = true
+					break
 			for rect: Rect2 in occupied:
+				if blocked:
+					break
 				if lot.intersects(rect):
 					blocked = true
 					break
 			if blocked:
 				continue
 			occupied.append(lot)
-			var grid_x := int((x + 120) / 22)
-			var grid_z := int((z + 580) / 22)
+			var grid_x := int((x + 280) / 22)
+			var grid_z := int((z + 770) / 22)
 			var variant := (floori(float(grid_x) / 2.0) + floori(float(grid_z) / 2.0)) % 3
 			match variant:
 				0:
@@ -787,7 +919,7 @@ static func _build_pocket_gardens(parent: Node3D) -> void:
 						tree_crowns.append({"size": Vector3(3.5, 4.2, 3.5), "position": tree_pos + Vector3(0, 3.5, 0), "y_rot": 0.0})
 						_invisible_collider(parent, tree_pos + Vector3(0, 1.1, 0), Vector3(0.9, 2.2, 0.9))
 				1:
-					parking_surfaces.append({"size": Vector3(18, 0.08, 18), "position": pos + Vector3(0, 0.04, 0), "y_rot": 0.0})
+					parking_surfaces.append({"size": Vector3(20, 0.08, 20), "position": pos + Vector3(0, 0.04, 0), "y_rot": 0.0})
 					for line_x in [-7.0, -3.5, 0.0, 3.5, 7.0]:
 						parking_lines.append({"size": Vector3(0.10, 0.015, 15), "position": pos + Vector3(line_x, 0.09, 0), "y_rot": 0.0})
 					for car_x in [-5.2, 0.0, 5.2]:
@@ -795,17 +927,59 @@ static func _build_pocket_gardens(parent: Node3D) -> void:
 						parked_cars.append({"size": Vector3(1.75, 0.62, 3.5), "position": car_pos + Vector3(0, 0.42, 0), "y_rot": 0.0})
 						parked_windows.append({"size": Vector3(1.38, 0.36, 1.65), "position": car_pos + Vector3(0, 0.85, -0.1), "y_rot": 0.0})
 						_invisible_collider(parent, car_pos + Vector3(0, 0.65, 0), Vector3(1.85, 1.3, 3.6))
+					_add_yard_driveway(pos, surfaces, driveways)
 				2:
-					parking_surfaces.append({"size": Vector3(18, 0.08, 18), "position": pos + Vector3(0, 0.04, 0), "y_rot": 0.0})
+					parking_surfaces.append({"size": Vector3(20, 0.08, 20), "position": pos + Vector3(0, 0.04, 0), "y_rot": 0.0})
 					for garage_x in [-5.7, 0.0, 5.7]:
 						var garage_pos := pos + Vector3(garage_x, 0, 1.8)
 						garage_bodies.append({"size": Vector3(5.0, 2.7, 6.5), "position": garage_pos + Vector3(0, 1.35, 0), "y_rot": 0.0})
 						garage_roofs.append({"size": Vector3(5.3, 0.20, 6.8), "position": garage_pos + Vector3(0, 2.8, 0), "y_rot": 0.0})
 						garage_doors.append({"size": Vector3(4.2, 2.15, 0.10), "position": garage_pos + Vector3(0, 1.1, -3.3), "y_rot": 0.0})
 						_invisible_collider(parent, garage_pos + Vector3(0, 1.35, 0), Vector3(5.0, 2.7, 6.5))
+					_add_yard_driveway(pos, surfaces, driveways)
 			count += 1
+	# The 22m/18x18 pass above only lands where a whole courtyard fits - most
+	# of a real gap between two 46m-spaced building rows is narrower than
+	# that and got rejected outright, so it stayed bare grass with nothing
+	# in it at all. A second, finer pass (11m step, 8x8 lot) can't fit a
+	# parking lot but can always fit a tree or a bench, so it catches
+	# everything the first pass had to skip.
+	var fine_count := 0
+	for x in range(-280, 971, 11):
+		for z in range(-770, 471, 11):
+			if (int((x + 280) / 11) + int((z + 770) / 11)) % 2 != 0:
+				continue # half-density checkerboard keeps this pass cheap and uncluttered
+			var pos := Vector3(x, 0, z)
+			var lot := Rect2(Vector2(x - 4, z - 4), Vector2(8, 8))
+			var blocked: bool = is_road_surface(pos, surfaces, 8.0)
+			for rect: Rect2 in waypoint_clearance:
+				if lot.intersects(rect):
+					blocked = true
+					break
+			for rect: Rect2 in occupied:
+				if blocked:
+					break
+				if lot.intersects(rect):
+					blocked = true
+					break
+			if blocked:
+				continue
+			occupied.append(lot)
+			match (int((x + 280) / 11) + int((z + 770) / 11) * 3) % 3:
+				0:
+					tree_trunks.append({"size": Vector3(0.6, 1.9, 0.6), "position": pos + Vector3(0, 0.95, 0), "y_rot": 0.0})
+					tree_crowns.append({"size": Vector3(3.0, 3.6, 3.0), "position": pos + Vector3(0, 3.0, 0), "y_rot": 0.0})
+				1:
+					seats.append({"size": Vector3(2.2, 0.42, 0.6), "position": pos + Vector3(0, 0.21, 0), "y_rot": deg_to_rad(90.0) if int(x) % 22 == 0 else 0.0})
+					foliage.append({"size": Vector3(1.6, 0.6, 1.4), "position": pos + Vector3(0, 0.3, 1.6), "y_rot": 0.0})
+				_:
+					planters.append({"size": Vector3(2.6, 0.4, 1.8), "position": pos + Vector3(0, 0.2, 0), "y_rot": 0.0})
+					foliage.append({"size": Vector3(2.2, 0.6, 1.4), "position": pos + Vector3(0, 0.5, 0), "y_rot": 0.0})
+			fine_count += 1
 	parent.set_meta("pocket_gardens", count)
+	parent.set_meta("pocket_gardens_fine", fine_count)
 	_multimesh_boxes(parent, "CourtyardPaths", CityMaterials.surface("paving"), courtyard_paths)
+	_multimesh_boxes(parent, "YardDriveways", CityMaterials.surface("asphalt"), driveways)
 	_multimesh_boxes(parent, "LotParking", CityMaterials.surface("asphalt"), parking_surfaces)
 	_multimesh_boxes(parent, "ParkingLines", BusVisual.material(Color("c6c5b8")), parking_lines)
 	_multimesh_boxes(parent, "GardenBeds", CityMaterials.surface("concrete"), planters)
@@ -848,7 +1022,13 @@ static func _place_city_block(parent: Node3D, pos: Vector3, size: Vector3, reser
 		if lot.intersects(rect):
 			return
 	occupied.append(lot)
-	var colors := [Color("aba699"),Color("929f9d"),Color("ad9a89"),Color("959aa6"),Color("b5ae99")]
+	# A wider, less uniform palette than the original five tones - panel
+	# blocks, brick and a couple of cooler modern-renovation colors mixed in
+	# so a long street doesn't read as the same building copy-pasted.
+	var colors := [
+		Color("aba699"), Color("929f9d"), Color("ad9a89"), Color("959aa6"), Color("b5ae99"),
+		Color("a8795f"), Color("8a9384"), Color("c2a87c"), Color("7f8a94"), Color("b09280"),
+	]
 	var center := pos+Vector3(0,size.y/2,0)
 	entries.append({"size":size,"position":center,"y_rot":0.0,"color":colors[rng.randi()%colors.size()]})
 	_invisible_collider(parent,center,size)

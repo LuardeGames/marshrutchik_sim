@@ -112,7 +112,7 @@ func _process(delta: float) -> void:
 
 func _build_top_bar(root: Control) -> void:
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", UITheme.panel_style())
+	panel.add_theme_stylebox_override("panel", UITheme.accent_panel_style())
 	panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	panel.position = Vector2(16, 16)
 	root.add_child(panel)
@@ -125,9 +125,9 @@ func _build_top_bar(root: Control) -> void:
 	row1.add_theme_constant_override("separation", 18)
 	vbox.add_child(row1)
 
-	money_label = UITheme.make_label("" + str(SaveManager.get_money()) + " ₽", 24, UITheme.COLOR_ACCENT, true)
+	money_label = UITheme.make_mono_label(str(SaveManager.get_money()) + " ₽", 24, UITheme.COLOR_ACCENT)
 	row1.add_child(money_label)
-	speed_label = UITheme.make_label("0 км/ч", 24, UITheme.COLOR_TEXT)
+	speed_label = UITheme.make_mono_label("0 км/ч", 24, UITheme.COLOR_TEXT)
 	row1.add_child(speed_label)
 	passengers_label = UITheme.make_label("В салоне: 0 / 10", 20, UITheme.COLOR_ACCENT_2)
 	row1.add_child(passengers_label)
@@ -188,7 +188,7 @@ func _build_route_bar(root: Control) -> void:
 	root.add_child(wrapper)
 
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", UITheme.panel_style())
+	panel.add_theme_stylebox_override("panel", UITheme.accent_panel_style())
 	wrapper.add_child(panel)
 
 	var vbox := VBoxContainer.new()
@@ -679,11 +679,13 @@ func _build_context(root: Control) -> void:
 func _refresh_context() -> void:
 	if not vehicle or not route_manager or not context_label:
 		return
-	var limit := 40
+	var limit := 60
 	var scene := get_tree().current_scene
 	var enforcement = scene.get("rule_enforcement") if scene else null
 	if enforcement:
 		limit = enforcement.get_speed_limit_kmh()
+	if speed_label:
+		speed_label.add_theme_color_override("font_color", UITheme.COLOR_BAD if vehicle.get_speed_kmh() > float(limit) + 5.0 else UITheme.COLOR_TEXT)
 	time_label.text="Время %s  ·  За рейс %d ₽  ·  Лимит %d км/ч" % [GameManager.format_time(GameManager.trip_time),EconomyManager.get_trip_total(),limit]
 	var key:="Двери" if is_touch_device else "E"
 	if passenger_manager.boarding_pending>0:
