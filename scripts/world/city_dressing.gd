@@ -75,6 +75,9 @@ static func build(parent: Node3D, waypoints: Array[Vector3]) -> void:
 		_sign(plaza,"ул. МИРА, %d" % (i*8+3),Vector3(-1.7,2.24,-1.82),0.0018)
 	_build_ambient_life(parent, waypoints)
 	_build_sidewalk_props(root, waypoints)
+	_build_parks_and_courtyards(root, waypoints)
+	_build_chain_stores(root)
+	_build_neighborhood_life(root, waypoints)
 
 static func _build_ambient_life(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	var rng := RandomNumberGenerator.new()
@@ -188,6 +191,98 @@ static func _shrub(parent: Node3D, pos: Vector3, color: Color, scale_value: floa
 	shrub.position = pos
 	shrub.scale = Vector3(scale_value, scale_value, scale_value)
 	parent.add_child(shrub)
+
+static func _build_parks_and_courtyards(root: Node3D, waypoints: Array[Vector3]) -> void:
+	var park_index := 0
+	for i in range(waypoints.size()):
+		if i % 3 != 0:
+			continue
+		var a: Vector3 = waypoints[i]
+		var b: Vector3 = waypoints[(i + 1) % waypoints.size()]
+		var dir: Vector3 = (b - a).normalized()
+		var side: Vector3 = Vector3(-dir.z, 0, dir.x)
+		var center: Vector3 = a.lerp(b, 0.52) + side * (18.0 if i % 2 == 0 else -18.0)
+		var park := Node3D.new()
+		park.name = "Park_%d" % park_index
+		park.position = center
+		park.rotation.y = atan2(dir.x, dir.z)
+		root.add_child(park)
+		WorldBuilder._box(park, Vector3(0, 0.04, 0), Vector3(18.0, 0.08, 30.0), Color("5e744e"), false)
+		WorldBuilder._box(park, Vector3(0, 0.075, 0), Vector3(2.0, 0.035, 28.0), Color("b0a27f"), false)
+		for x in [-6.0, 6.0]:
+			for z in [-10.0, 0.0, 10.0]:
+				var tree_pos := Vector3(x, 0, z)
+				WorldBuilder._box(park, tree_pos + Vector3(0, 0.8, 0), Vector3(0.65, 1.6, 0.65), Color("76533e"), false)
+				_shrub(park, tree_pos + Vector3(0, 2.25, 0), Color("4b704d"), 1.45)
+				WorldBuilder._invisible_collider(park, tree_pos + Vector3(0, 1.2, 0), Vector3(1.1, 2.4, 1.1))
+		WorldBuilder._box(park, Vector3(-5.0, 0.55, 4.0), Vector3(3.0, 0.12, 0.55), Color("735442"), false)
+		WorldBuilder._box(park, Vector3(-5.0, 0.30, 4.0), Vector3(0.10, 0.6, 0.5), Color("596461"), false)
+		WorldBuilder._box(park, Vector3(-3.8, 0.30, 4.0), Vector3(0.10, 0.6, 0.5), Color("596461"), false)
+		park_index += 1
+
+static func _build_chain_stores(root: Node3D) -> void:
+	var stores: Array[Dictionary] = [
+		{"pos": Vector3(-35, 0, -35), "name": "ПЯТЬ КРУГОВ", "color": Color("5d8b55")},
+		{"pos": Vector3(335, 0, -150), "name": "WILD BOX", "color": Color("8a55a5")},
+		{"pos": Vector3(540, 0, 85), "name": "ГИПЕРМАГ", "color": Color("a84c43")},
+		{"pos": Vector3(115, 0, 215), "name": "OZONЬКА", "color": Color("3672a6")}
+	]
+	for store in stores:
+		var store_pos: Vector3 = store["pos"]
+		var store_name: String = String(store["name"])
+		var store_color: Color = store["color"]
+		_chain_store(root, store_pos, store_name, store_color)
+
+static func _chain_store(root: Node3D, pos: Vector3, store_name: String, color: Color) -> void:
+	var store := Node3D.new()
+	store.name = "ChainStore_" + store_name
+	store.position = pos
+	root.add_child(store)
+	WorldBuilder._box(store, Vector3(0, 2.0, 0), Vector3(9.0, 4.0, 7.0), Color("c1b89f"))
+	WorldBuilder._invisible_collider(store, Vector3(0, 2.0, 0), Vector3(9.0, 4.0, 7.0))
+	WorldBuilder._box(store, Vector3(0, 3.65, -3.65), Vector3(9.4, 0.8, 0.18), color, false)
+	WorldBuilder._box(store, Vector3(0, 1.7, -3.63), Vector3(7.2, 1.7, 0.08), Color("42606a"), false)
+	_sign(store, store_name, Vector3(0, 3.65, -3.78), 0.005)
+
+static func _build_neighborhood_life(root: Node3D, waypoints: Array[Vector3]) -> void:
+	var colors: Array[Color] = [Color("536a72"), Color("8b5148"), Color("b18d53"), Color("65745b")]
+	var courtyard_index := 0
+	for i in range(waypoints.size()):
+		# These two route edges cross the civic and industrial loops; a yard
+		# here would put its storage row directly on the secondary street.
+		if i % 2 == 0 or i in [5, 13]:
+			continue
+		var a: Vector3 = waypoints[i]
+		var b: Vector3 = waypoints[(i + 1) % waypoints.size()]
+		var dir: Vector3 = (b - a).normalized()
+		var side: Vector3 = Vector3(-dir.z, 0, dir.x)
+		var center: Vector3 = a.lerp(b, 0.52) + side * (27.0 if i % 4 == 1 else -27.0)
+		var yard := Node3D.new()
+		yard.name = "Courtyard_%d" % courtyard_index
+		yard.position = center
+		yard.rotation.y = atan2(dir.x, dir.z)
+		root.add_child(yard)
+		WorldBuilder._box(yard, Vector3(0, 0.035, 0), Vector3(24.0, 0.07, 20.0), Color("536442"), false)
+		WorldBuilder._box(yard, Vector3(0, 0.075, 0), Vector3(1.8, 0.035, 19.0), Color("a79b79"), false)
+		for x in [-8.0, -2.7, 2.7, 8.0]:
+			WorldBuilder._box(yard, Vector3(x, 1.35, -7.2), Vector3(4.5, 2.7, 4.0), Color("77706a"))
+			WorldBuilder._box(yard, Vector3(x, 2.80, -7.2), Vector3(4.8, 0.25, 4.3), Color("4d5553"), false)
+		for car_index in range(3):
+			_parked_car(yard, Vector3(-8.0 + float(car_index) * 5.2, 0, 5.4), dir, colors[(i + car_index) % colors.size()])
+		# A small Soviet-style playground gives empty courtyards a readable use.
+		WorldBuilder._box(yard, Vector3(5.2, 0.20, -0.8), Vector3(4.5, 0.4, 3.8), Color("b99b62"), false)
+		WorldBuilder._box(yard, Vector3(3.4, 1.15, -1.8), Vector3(0.14, 2.3, 0.14), Color("b24c3e"), false)
+		WorldBuilder._box(yard, Vector3(5.2, 1.15, -1.8), Vector3(0.14, 2.3, 0.14), Color("b24c3e"), false)
+		WorldBuilder._box(yard, Vector3(4.3, 2.05, -1.8), Vector3(1.2, 0.10, 0.10), Color("d0b25c"), false)
+		WorldBuilder._box(yard, Vector3(-7.0, 1.0, -0.8), Vector3(0.10, 2.0, 0.10), Color("596461"), false)
+		WorldBuilder._box(yard, Vector3(-3.0, 1.0, -0.8), Vector3(0.10, 2.0, 0.10), Color("596461"), false)
+		WorldBuilder._box(yard, Vector3(-5.0, 1.6, -0.8), Vector3(4.0, 0.08, 0.08), Color("596461"), false)
+		WorldBuilder._box(yard, Vector3(-8.0, 0.45, 0.5), Vector3(0.75, 0.9, 0.75), Color("596461"))
+		WorldBuilder._box(yard, Vector3(-6.8, 0.45, 0.5), Vector3(0.75, 0.9, 0.75), Color("596461"))
+		for x in [-9.0, 9.0]:
+			_shrub(yard, Vector3(x, 1.3, 6.8), Color("4f704d"), 1.25)
+			WorldBuilder._invisible_collider(yard, Vector3(x, 1.1, 6.8), Vector3(1.0, 2.2, 1.0))
+		courtyard_index += 1
 
 static func _sign(parent: Node3D,text: String,pos: Vector3,pixel: float) -> void:
 	var label:=Label3D.new()

@@ -32,9 +32,11 @@ static func build(parent: Node3D) -> Dictionary:
 		stop_by_waypoint[wp_index] = def.id
 
 	_build_districts(parent, waypoints, stop_defs)
+	_build_city_variety(parent)
 	CityDressing.build(parent, waypoints)
 	_build_filler(parent, waypoints, RandomNumberGenerator.new())
 	_build_trees(parent, waypoints)
+	_build_pocket_gardens(parent)
 
 	return {
 		"stops": stops,
@@ -173,6 +175,7 @@ static func _build_road(parent: Node3D, waypoints: Array[Vector3]) -> void:
 		var angle := atan2(dir.x, dir.z)
 
 		road_entries.append({"size": Vector3(ROAD_WIDTH, 0.12, length), "position": Vector3(mid.x, 0.06, mid.z), "y_rot": angle})
+		_register_road_surface(parent, a, b, ROAD_WIDTH, ROAD_WIDTH * 0.5)
 
 		# center dashed line
 		var dash_count: int = max(2, int(length / 8.0))
@@ -239,9 +242,12 @@ static func _build_traffic_lights(parent: Node3D, waypoints: Array[Vector3]) -> 
 
 static func _build_traffic_dummies(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	var outer: Array[Vector3] = [Vector3(-140,0,-600),Vector3(760,0,-600),Vector3(760,0,280),Vector3(-140,0,280)]
-	for circuit in [waypoints,outer]:
+	var civic_loop: Array[Vector3] = [Vector3(-90,0,-80),Vector3(250,0,-80),Vector3(250,0,110),Vector3(-90,0,110)]
+	var industrial_loop: Array[Vector3] = [Vector3(380,0,-430),Vector3(680,0,-430),Vector3(680,0,-170),Vector3(520,0,-110),Vector3(380,0,-190)]
+	for circuit in [waypoints, outer, civic_loop, industrial_loop]:
 		var is_route: bool = circuit == waypoints
-		var count: int = 20 if is_route else 12
+		var is_outer: bool = circuit == outer
+		var count: int = 20 if is_route else (12 if is_outer else 5)
 		for reverse in [false,true]:
 			for index in range(count):
 				var car := TrafficDummy.new()
@@ -422,10 +428,10 @@ static func _build_center(parent: Node3D, center: Vector3, perp: Vector3, rng: R
 	var legs := _box(parent, center - perp * 16.0 + Vector3(0, 2.0, 0), Vector3(0.4, 4.0, 0.4), Color(0.3, 0.3, 0.3), false)
 
 static func _build_station(parent: Node3D, center: Vector3, perp: Vector3, rng: RandomNumberGenerator) -> void:
-	var b := _box(parent, center + perp * 24.0 + Vector3(0, 7, 0), Vector3(26.0, 14.0, 12.0), Color(0.8, 0.75, 0.55))
+	var b := _box(parent, center - perp * 24.0 + Vector3(0, 7, 0), Vector3(26.0, 14.0, 12.0), Color(0.8, 0.75, 0.55))
 	_add_window_band(b, Vector3(26.0, 14.0, 12.0))
-	var tower := _box(parent, center + perp * 24.0 + Vector3(0, 17, -4), Vector3(4.0, 20.0, 4.0), Color(0.75, 0.68, 0.45))
-	var spire := _box(parent, center + perp * 24.0 + Vector3(0, 28, -4), Vector3(1.0, 3.0, 1.0), Color(0.6, 0.55, 0.35), false)
+	var tower := _box(parent, center - perp * 24.0 + Vector3(0, 17, -4), Vector3(4.0, 20.0, 4.0), Color(0.75, 0.68, 0.45))
+	var spire := _box(parent, center - perp * 24.0 + Vector3(0, 28, -4), Vector3(1.0, 3.0, 1.0), Color(0.6, 0.55, 0.35), false)
 
 static func _build_depot(parent: Node3D, center: Vector3, perp: Vector3, rng: RandomNumberGenerator) -> void:
 	# tangent = road direction at this point, derived from perp so garages
@@ -435,6 +441,81 @@ static func _build_depot(parent: Node3D, center: Vector3, perp: Vector3, rng: Ra
 		var offset := perp * 22.0 + tangent * (i - 1) * 8.0
 		_box(parent, center + offset + Vector3(0, 2.2, 0), Vector3(5.5, 4.4, 7.0), Color(0.4, 0.42, 0.4))
 	_box(parent, center + perp * 22.0 + Vector3(0, 0.05, 0), Vector3(10.0, 0.05, 24.0), Color(0.3, 0.3, 0.3), false)
+
+static func _build_city_variety(parent: Node3D) -> void:
+	# A few deliberately different silhouettes break the endless panel-block
+	# rhythm: brick houses, Stalin-era frontage, a school, a fire station and
+	# a small private-sector street typical of a provincial CIS city.
+	_build_brick_house(parent, Vector3(-105, 0, -520), Vector3(24, 15, 12), 0.0)
+	_build_brick_house(parent, Vector3(90, 0, -520), Vector3(30, 18, 12), 0.0)
+	_build_stalinka(parent, Vector3(440, 0, 210), Vector3(32, 18, 16))
+	_build_school(parent, Vector3(-180, 0, 125), Vector3(30, 7, 18))
+	_build_fire_station(parent, Vector3(710, 0, 120), Vector3(24, 6, 16))
+	_build_private_street(parent, Vector3(-270, 0, 80))
+	_build_post_office(parent, Vector3(5, 0, 245), Vector3(22, 7, 14))
+	_build_cinema(parent, Vector3(225, 0, 245), Vector3(26, 8, 18))
+	_build_market_hall(parent, Vector3(-185, 0, -175), Vector3(26, 8, 18))
+	_build_warehouse(parent, Vector3(720, 0, -500), Vector3(30, 8, 22))
+
+static func _build_brick_house(parent: Node3D, pos: Vector3, size: Vector3, y_rot: float) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("a86e55"), true, y_rot)
+	_add_window_band(building, size)
+	_box(parent, pos + Vector3(0, size.y + 0.18, 0), Vector3(size.x + 0.45, 0.35, size.z + 0.45), Color("5b4b43"), false, y_rot)
+
+static func _build_stalinka(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("b8a486"))
+	_add_window_band(building, size)
+	for x in [-size.x * 0.34, size.x * 0.34]:
+		_box(parent, pos + Vector3(x, size.y * 0.5, -size.z * 0.53), Vector3(0.55, size.y, 0.30), Color("8d7962"), false)
+	_box(parent, pos + Vector3(0, size.y + 0.25, 0), Vector3(size.x + 2.0, 0.5, size.z + 2.0), Color("756654"), false)
+
+static func _build_school(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("c7b98f"))
+	_add_window_band(building, size)
+	_box(parent, pos + Vector3(0, size.y + 0.15, 0), Vector3(size.x + 0.5, 0.30, size.z + 0.5), Color("6d766d"), false)
+	BusVisual.label(parent, "ШКОЛА № 7", pos + Vector3(0, 3.1, -size.z * 0.54), PI, 0.004)
+	_box(parent, pos + Vector3(0, 0.35, -size.z * 0.9), Vector3(9.0, 0.7, 5.0), Color("57734d"), false)
+
+static func _build_fire_station(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("a85643"))
+	_add_window_band(building, size)
+	for x in [-7.0, 0.0, 7.0]:
+		_box(parent, pos + Vector3(x, 1.45, -size.z * 0.54), Vector3(5.0, 2.4, 0.12), Color("3f5558"), false)
+	BusVisual.label(parent, "ПОЖАРНАЯ ЧАСТЬ", pos + Vector3(0, size.y + 0.7, -size.z * 0.54), PI, 0.003)
+
+static func _build_private_street(parent: Node3D, origin: Vector3) -> void:
+	for i in range(4):
+		var pos := origin + Vector3(float(i) * 28.0, 0, 0)
+		_box(parent, pos + Vector3(0, 2.2, 0), Vector3(18.0, 4.4, 10.0), Color("b58d68"))
+		_box(parent, pos + Vector3(0, 4.6, 0), Vector3(19.0, 0.35, 11.0), Color("5c4f43"), false)
+		_box(parent, pos + Vector3(0, 0.45, -6.4), Vector3(20.0, 0.9, 0.18), Color("7c684c"), true)
+
+static func _build_post_office(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("c28362"))
+	_add_window_band(building, size)
+	_box(parent, pos + Vector3(0, size.y + 0.2, 0), Vector3(size.x + 0.7, 0.35, size.z + 0.7), Color("6a7169"), false)
+	BusVisual.label(parent, "ПОЧТА", pos + Vector3(0, 4.3, -size.z * 0.55), PI, 0.005)
+
+static func _build_cinema(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("6b7182"))
+	_add_window_band(building, size)
+	_box(parent, pos + Vector3(0, 4.6, -size.z * 0.55), Vector3(size.x * 0.75, 2.2, 0.14), Color("384e60"), false)
+	BusVisual.label(parent, "КИНОТЕАТР «ЗАРЯ»", pos + Vector3(0, 4.7, -size.z * 0.65), PI, 0.003)
+
+static func _build_market_hall(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("9d7655"))
+	_add_window_band(building, size)
+	_box(parent, pos + Vector3(0, size.y + 0.45, 0), Vector3(size.x + 1.2, 0.8, size.z + 1.2), Color("4d5b59"), false)
+	for x in [-8.0, 0.0, 8.0]:
+		_box(parent, pos + Vector3(x, 1.4, -size.z * 0.58), Vector3(5.5, 2.0, 0.12), Color("b85a42"), false)
+	BusVisual.label(parent, "ГОРОДСКОЙ РЫНОК", pos + Vector3(0, 5.2, -size.z * 0.62), PI, 0.003)
+
+static func _build_warehouse(parent: Node3D, pos: Vector3, size: Vector3) -> void:
+	var building := _box(parent, pos + Vector3(0, size.y * 0.5, 0), size, Color("777b73"))
+	_add_window_band(building, size)
+	for x in [-9.0, 0.0, 9.0]:
+		_box(parent, pos + Vector3(x, 1.7, -size.z * 0.55), Vector3(6.0, 3.0, 0.14), Color("354a50"), false)
+	BusVisual.label(parent, "СКЛАД / ЛОГИСТИКА", pos + Vector3(0, 5.4, -size.z * 0.60), PI, 0.003)
 
 static func _add_window_band(building: Node3D, size: Vector3) -> void:
 	for child in building.get_children():
@@ -456,7 +537,7 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 	var front_entries: Array = []
 	var back_entries: Array = []
 	var occupied: Array[Rect2] = []
-	_collect_occupied(parent, occupied)
+	_collect_major_occupied(parent, occupied)
 	var streets: Array = []
 	for i in range(waypoints.size()):
 		streets.append([waypoints[i], waypoints[(i+1)%waypoints.size()]])
@@ -464,10 +545,23 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 	_build_road(parent, ring)
 	for i in range(4):
 		streets.append([ring[i],ring[(i+1)%4]])
+	# Secondary city grid: the route is only one part of the road network.
+	# These loops intentionally use different scales so the map reads as
+	# districts connected by streets rather than a single racing circuit.
+	var civic_loop: Array[Vector3] = [Vector3(-90,0,-80),Vector3(250,0,-80),Vector3(250,0,110),Vector3(-90,0,110)]
+	var industrial_loop: Array[Vector3] = [Vector3(380,0,-430),Vector3(680,0,-430),Vector3(680,0,-170),Vector3(520,0,-110),Vector3(380,0,-190)]
+	var west_loop: Array[Vector3] = [Vector3(-100,0,-470),Vector3(90,0,-470),Vector3(90,0,-270),Vector3(-40,0,-200),Vector3(-170,0,-300)]
+	_add_network_loop(parent, streets, civic_loop)
+	_add_network_loop(parent, streets, industrial_loop)
+	_add_network_loop(parent, streets, west_loop)
+	_build_roundabout(parent, streets, Vector3(285,0,-95), 48.0)
+	_build_narrow_street(parent, streets, Vector3(270,0,110), Vector3(390,0,240))
+	_build_bridge_feature(parent, streets)
 	var links: Array = [[Vector3(-140,0,-140),Vector3(0,0,-140)], [Vector3(300,0,-600),Vector3(300,0,-460)], [Vector3(760,0,-140),Vector3(620,0,-140)], [Vector3(300,0,280),Vector3(300,0,140)]]
 	var link_surfaces: Array = []
 	for link in links:
 		streets.append(link)
+		_register_road_surface(parent, link[0], link[1], 10.0, 5.0)
 		var delta: Vector3 = link[1]-link[0]
 		link_surfaces.append({"size":Vector3(10,0.14,delta.length()+10),"position":(link[0]+link[1])*0.5+Vector3(0,0.07,0),"y_rot":atan2(delta.x,delta.z)})
 	_multimesh_boxes(parent,"ConnectingStreets",CityMaterials.surface("asphalt"),link_surfaces)
@@ -475,7 +569,9 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 	for street in streets:
 		var a: Vector3 = street[0]
 		var b: Vector3 = street[1]
-		reserved.append(Rect2(Vector2(minf(a.x,b.x),minf(a.z,b.z)),Vector2(absf(b.x-a.x),absf(b.z-a.z))).grow(9.5))
+		_reserve_street(reserved, a, b)
+	for waypoint in waypoints:
+		reserved.append(Rect2(Vector2(waypoint.x - 20.0, waypoint.z - 20.0), Vector2(40.0, 40.0)))
 	for stop in RouteDefinition.stops():
 		var p := RouteDefinition.stop_position(stop.waypoint_index)
 		reserved.append(Rect2(Vector2(p.x-16,p.z-16),Vector2(32,32)))
@@ -492,14 +588,29 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 					var pos: Vector3 = a.lerp(b,(i+0.5)/float(count))+perp*side*(23.0+row*38.0)
 					var size := Vector3(30, float(rng.randi_range(5,9))*3,12) if absf(dir.x)>0.5 else Vector3(12,float(rng.randi_range(5,9))*3,30)
 					_place_city_block(parent,pos,size,reserved,occupied,front_entries,rng)
+	# Smaller three-to-six-storey sections fit between junction clearances and
+	# landmarks where a full 30-metre slab would leave an empty street edge.
+	for street in streets:
+		var a: Vector3 = street[0]
+		var b: Vector3 = street[1]
+		var dir := (b - a).normalized()
+		var perp := Vector3(-dir.z, 0, dir.x)
+		var count := int(a.distance_to(b) / 24.0)
+		for i in range(count):
+			for side: float in [-1.0, 1.0]:
+				var pos: Vector3 = a.lerp(b, (float(i) + 0.5) / float(count)) + perp * side * 22.0
+				var size := Vector3(18, float(rng.randi_range(3, 6)) * 3, 10) if absf(dir.x) > 0.5 else Vector3(10, float(rng.randi_range(3, 6)) * 3, 18)
+				_place_city_block(parent, pos, size, reserved, occupied, front_entries, rng)
 	# Fill the interior and extend beyond the outer avenue. Alternating slab
 	# orientation leaves connected courtyards instead of isolated towers.
-	for x in range(-280,921,56):
-		for z in range(-720,421,56):
+	for x in range(-280, 921, 46):
+		for z in range(-720, 421, 46):
 			var pos := Vector3(x,0,z)
-			var size := Vector3(30,float(rng.randi_range(5,12))*3,12) if (x/56+z/56)%2==0 else Vector3(12,float(rng.randi_range(5,12))*3,30)
+			var size := Vector3(32,float(rng.randi_range(5,12))*3,16) if (x/46+z/46)%2==0 else Vector3(16,float(rng.randi_range(5,12))*3,32)
 			_place_city_block(parent,pos,size,reserved,occupied,front_entries,rng)
+	_build_backdrop_blocks(back_entries, rng)
 	parent.set_meta("city_buildings",front_entries.size())
+	parent.set_meta("city_backdrop_buildings", back_entries.size())
 	parent.set_meta("city_streets",streets)
 
 	var body_mat := CityMaterials.facade(Color.WHITE, true)
@@ -509,22 +620,204 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 	var roofs: Array=[]
 	var balconies: Array=[]
 	var doors: Array=[]
-	for e in front_entries:
+	var rooftop_units: Array=[]
+	for entry_index in range(front_entries.size()):
+		var e: Dictionary = front_entries[entry_index]
 		walks.append({"size":Vector3(e.size.x+3,0.08,e.size.z+3),"position":Vector3(e.position.x,0.04,e.position.z),"y_rot":0.0})
 		roofs.append({"size":Vector3(e.size.x+0.25,0.18,e.size.z+0.25),"position":e.position+Vector3(0,e.size.y/2.0,0),"y_rot":0.0})
-		var front_z: float=e.position.z-e.size.z/2.0
-		doors.append({"size":Vector3(1.2,2.1,0.05),"position":Vector3(e.position.x,1.05,front_z-0.03),"y_rot":0.0})
-		roofs.append({"size":Vector3(2.1,0.14,1.5),"position":Vector3(e.position.x,2.4,front_z-0.7),"y_rot":0.0})
-		var balcony_x: float=roundf((e.position.x+e.size.x*0.23-1.5)/3.0)*3.0+1.5
-		for floor_index in range(1,int(e.size.y/3.0)):
-			var y:=float(floor_index)*3.0+0.3
-			balconies.append({"size":Vector3(2.2,0.14,0.95),"position":Vector3(balcony_x,y,front_z-0.45),"y_rot":0.0})
-			balconies.append({"size":Vector3(2.2,0.82,0.08),"position":Vector3(balcony_x,y+0.45,front_z-0.89),"y_rot":0.0})
+		if entry_index % 3 == 0:
+			rooftop_units.append({"size": Vector3(3.6, 1.2, 2.5), "position": e.position + Vector3(e.size.x * 0.18, e.size.y / 2.0 + 0.7, 0), "y_rot": 0.0})
+		if e.size.x >= e.size.z:
+			var balcony_x: float = e.position.x + e.size.x * 0.23
+			for facade_side: float in [-1.0, 1.0]:
+				var front_z: float = e.position.z + facade_side * e.size.z / 2.0
+				doors.append({"size": Vector3(1.2, 2.1, 0.05), "position": Vector3(e.position.x, 1.05, front_z + facade_side * 0.03), "y_rot": 0.0})
+				roofs.append({"size": Vector3(2.1, 0.14, 1.5), "position": Vector3(e.position.x, 2.4, front_z + facade_side * 0.7), "y_rot": 0.0})
+				for floor_index in range(1, int(e.size.y / 3.0)):
+					var y := float(floor_index) * 3.0 + 0.3
+					balconies.append({"size": Vector3(2.2, 0.14, 0.95), "position": Vector3(balcony_x, y, front_z + facade_side * 0.45), "y_rot": 0.0})
+					balconies.append({"size": Vector3(2.2, 0.82, 0.08), "position": Vector3(balcony_x, y + 0.45, front_z + facade_side * 0.89), "y_rot": 0.0})
+		else:
+			var balcony_z: float = e.position.z + e.size.z * 0.23
+			for facade_side: float in [-1.0, 1.0]:
+				var front_x: float = e.position.x + facade_side * e.size.x / 2.0
+				doors.append({"size": Vector3(0.05, 2.1, 1.2), "position": Vector3(front_x + facade_side * 0.03, 1.05, e.position.z), "y_rot": 0.0})
+				roofs.append({"size": Vector3(1.5, 0.14, 2.1), "position": Vector3(front_x + facade_side * 0.7, 2.4, e.position.z), "y_rot": 0.0})
+				for floor_index in range(1, int(e.size.y / 3.0)):
+					var y := float(floor_index) * 3.0 + 0.3
+					balconies.append({"size": Vector3(0.95, 0.14, 2.2), "position": Vector3(front_x + facade_side * 0.45, y, balcony_z), "y_rot": 0.0})
+					balconies.append({"size": Vector3(0.08, 0.82, 2.2), "position": Vector3(front_x + facade_side * 0.89, y + 0.45, balcony_z), "y_rot": 0.0})
 	_multimesh_boxes(parent,"ApartmentFootpaths",CityMaterials.surface("paving"),walks)
 	_multimesh_boxes(parent,"RoofCapsAndCanopies",BusVisual.material(Color("697167")),roofs)
+	_multimesh_boxes(parent,"RoofEquipment",BusVisual.material(Color("59615e")),rooftop_units)
 	_multimesh_boxes(parent,"BalconyPanels",BusVisual.material(Color("899184")),balconies)
 	_multimesh_boxes(parent,"EntranceDoors",BusVisual.material(Color("3d5851")),doors)
 
+static func _reserve_street(reserved: Array[Rect2], start: Vector3, finish: Vector3) -> void:
+	var part_count := maxi(1, ceili(start.distance_to(finish) / 12.0))
+	for part_index in range(part_count):
+		var a := start.lerp(finish, float(part_index) / float(part_count))
+		var b := start.lerp(finish, float(part_index + 1) / float(part_count))
+		reserved.append(Rect2(Vector2(minf(a.x, b.x), minf(a.z, b.z)), Vector2(absf(b.x - a.x), absf(b.z - a.z))).grow(9.5))
+
+static func _build_backdrop_blocks(entries: Array, rng: RandomNumberGenerator) -> void:
+	var colors := [Color("858c8b"), Color("8f8c84"), Color("7d8589"), Color("91877e")]
+	for z: float in [-790.0, -840.0, 490.0, 540.0]:
+		for x in range(-340, 981, 38):
+			var size := Vector3(28.0, float(rng.randi_range(7, 15)) * 3.0, 18.0)
+			entries.append({"size": size, "position": Vector3(x, size.y * 0.5, z), "y_rot": 0.0, "color": colors[rng.randi() % colors.size()]})
+	for x: float in [-350.0, -400.0, 990.0, 1040.0]:
+		for z in range(-752, 453, 38):
+			var size := Vector3(18.0, float(rng.randi_range(7, 15)) * 3.0, 28.0)
+			entries.append({"size": size, "position": Vector3(x, size.y * 0.5, z), "y_rot": 0.0, "color": colors[rng.randi() % colors.size()]})
+
+static func _add_network_loop(parent: Node3D, streets: Array, points: Array[Vector3]) -> void:
+	_build_road(parent, points)
+	for i in range(points.size()):
+		streets.append([points[i], points[(i + 1) % points.size()]])
+
+static func _build_roundabout(parent: Node3D, streets: Array, center: Vector3, radius: float) -> void:
+	var points: Array[Vector3] = []
+	for i in range(8):
+		var angle: float = TAU * float(i) / 8.0
+		points.append(center + Vector3(cos(angle), 0, sin(angle)) * radius)
+	_add_network_loop(parent, streets, points)
+	_box(parent, center + Vector3(0, 0.12, 0), Vector3(radius * 0.92, 0.22, radius * 0.92), Color("68775b"), true)
+	for i in range(8):
+		var angle: float = TAU * float(i) / 8.0
+		var tree_pos: Vector3 = center + Vector3(cos(angle), 0.8, sin(angle)) * (radius * 0.32)
+		_box(parent, tree_pos, Vector3(1.0, 1.6, 1.0), Color("54704d"), true)
+
+static func _build_narrow_street(parent: Node3D, streets: Array, start: Vector3, finish: Vector3) -> void:
+	_register_road_surface(parent, start, finish, 6.2, 4.0)
+	var dir: Vector3 = (finish - start).normalized()
+	var middle: Vector3 = (start + finish) * 0.5
+	_box(parent, middle + Vector3(0, 0.05, 0), Vector3(6.2, 0.12, start.distance_to(finish) + 8.0), Color("343b3b"), false, atan2(dir.x, dir.z))
+	streets.append([start, finish])
+	# Close the lane with a pair of close walls, making this a deliberate
+	# low-speed shortcut rather than another open highway.
+	var side: Vector3 = Vector3(-dir.z, 0, dir.x)
+	_box(parent, start.lerp(finish, 0.5) + side * 4.8 + Vector3(0, 1.0, 0), Vector3(0.35, 2.0, finish.distance_to(start)), Color("77736b"), true, atan2(dir.x, dir.z))
+	_box(parent, start.lerp(finish, 0.5) - side * 4.8 + Vector3(0, 1.0, 0), Vector3(0.35, 2.0, finish.distance_to(start)), Color("77736b"), true, atan2(dir.x, dir.z))
+
+static func _build_bridge_feature(parent: Node3D, streets: Array) -> void:
+	var start := Vector3(250, 0, -80)
+	var finish := Vector3(380, 0, -80)
+	_register_road_surface(parent, start, finish, 12.8, 0.0)
+	var dir: Vector3 = (finish - start).normalized()
+	var side: Vector3 = Vector3(-dir.z, 0, dir.x)
+	var rail_start := start + dir * 12.0
+	var rail_middle := (rail_start + finish) * 0.5
+	var rail_length := rail_start.distance_to(finish)
+	streets.append([start, finish])
+	_box(parent, (start + finish) * 0.5 + Vector3(0, 0.16, 0), Vector3(12.8, 0.28, start.distance_to(finish)), Color("4b5353"), false, atan2(dir.x, dir.z))
+	_box(parent, rail_middle + side * 6.3 + Vector3(0, 0.85, 0), Vector3(0.28, 1.4, rail_length), Color("77756d"), true, atan2(dir.x, dir.z))
+	_box(parent, rail_middle - side * 6.3 + Vector3(0, 0.85, 0), Vector3(0.28, 1.4, rail_length), Color("77756d"), true, atan2(dir.x, dir.z))
+	for x in [0.18, 0.50, 0.82]:
+		var post_pos: Vector3 = start.lerp(finish, x)
+		_box(parent, post_pos + side * 6.3 + Vector3(0, 0.9, 0), Vector3(0.34, 1.8, 0.34), Color("8e887a"), true)
+		_box(parent, post_pos - side * 6.3 + Vector3(0, 0.9, 0), Vector3(0.34, 1.8, 0.34), Color("8e887a"), true)
+
+
+## Same oriented rectangles as the asphalt meshes, including extended ends.
+static func _register_road_surface(parent: Node3D, a: Vector3, b: Vector3, width: float, extension: float) -> void:
+	var surfaces: Array = parent.get_meta("road_surfaces", [])
+	surfaces.append({"a": a, "b": b, "width": width, "extension": extension})
+	parent.set_meta("road_surfaces", surfaces)
+
+static func is_road_surface(pos: Vector3, surfaces: Array, margin: float = 0.0) -> bool:
+	for surface: Dictionary in surfaces:
+		var a: Vector3 = surface["a"]
+		var b: Vector3 = surface["b"]
+		var direction: Vector3 = (b - a).normalized()
+		var offset: Vector3 = pos - a
+		var along: float = offset.dot(direction)
+		var lateral: float = absf(offset.dot(Vector3(-direction.z, 0, direction.x)))
+		var extension: float = float(surface["extension"]) + margin
+		if along >= -extension and along <= a.distance_to(b) + extension and lateral <= float(surface["width"]) * 0.5 + margin:
+			return true
+	return false
+
+## Turns leftover lots into readable courtyards instead of scattering the
+## same tiny planter across every empty patch.
+static func _build_pocket_gardens(parent: Node3D) -> void:
+	var occupied: Array[Rect2] = []
+	_collect_occupied(parent, occupied)
+	var surfaces: Array = parent.get_meta("road_surfaces", [])
+	var courtyard_paths: Array = []
+	var parking_surfaces: Array = []
+	var parking_lines: Array = []
+	var planters: Array = []
+	var foliage: Array = []
+	var seats: Array = []
+	var tree_trunks: Array = []
+	var tree_crowns: Array = []
+	var parked_cars: Array = []
+	var parked_windows: Array = []
+	var garage_bodies: Array = []
+	var garage_roofs: Array = []
+	var garage_doors: Array = []
+	var count: int = 0
+	for x in range(-120, 741, 22):
+		for z in range(-580, 261, 22):
+			var pos := Vector3(x, 0, z)
+			var lot := Rect2(Vector2(x - 9, z - 9), Vector2(18, 18))
+			var blocked: bool = is_road_surface(pos, surfaces, 13.0)
+			for rect: Rect2 in occupied:
+				if lot.intersects(rect):
+					blocked = true
+					break
+			if blocked:
+				continue
+			occupied.append(lot)
+			var grid_x := int((x + 120) / 22)
+			var grid_z := int((z + 580) / 22)
+			var variant := (floori(float(grid_x) / 2.0) + floori(float(grid_z) / 2.0)) % 3
+			match variant:
+				0:
+					courtyard_paths.append({"size": Vector3(16, 0.06, 2.2), "position": pos + Vector3(0, 0.03, 0), "y_rot": 0.0})
+					courtyard_paths.append({"size": Vector3(2.2, 0.06, 16), "position": pos + Vector3(0, 0.03, 0), "y_rot": 0.0})
+					for side: float in [-1.0, 1.0]:
+						var bed := pos + Vector3(side * 5.5, 0.22, 5.4)
+						planters.append({"size": Vector3(3.5, 0.44, 2.2), "position": bed, "y_rot": 0.0})
+						foliage.append({"size": Vector3(3.1, 0.72, 1.8), "position": bed + Vector3(0, 0.54, 0), "y_rot": 0.0})
+						seats.append({"size": Vector3(2.4, 0.45, 0.65), "position": pos + Vector3(side * 4.6, 0.225, -2.3), "y_rot": 0.0})
+						var tree_pos := pos + Vector3(side * 5.8, 0, -5.5)
+						tree_trunks.append({"size": Vector3(0.7, 2.2, 0.7), "position": tree_pos + Vector3(0, 1.1, 0), "y_rot": 0.0})
+						tree_crowns.append({"size": Vector3(3.5, 4.2, 3.5), "position": tree_pos + Vector3(0, 3.5, 0), "y_rot": 0.0})
+						_invisible_collider(parent, tree_pos + Vector3(0, 1.1, 0), Vector3(0.9, 2.2, 0.9))
+				1:
+					parking_surfaces.append({"size": Vector3(18, 0.08, 18), "position": pos + Vector3(0, 0.04, 0), "y_rot": 0.0})
+					for line_x in [-7.0, -3.5, 0.0, 3.5, 7.0]:
+						parking_lines.append({"size": Vector3(0.10, 0.015, 15), "position": pos + Vector3(line_x, 0.09, 0), "y_rot": 0.0})
+					for car_x in [-5.2, 0.0, 5.2]:
+						var car_pos := pos + Vector3(car_x, 0, 1.2)
+						parked_cars.append({"size": Vector3(1.75, 0.62, 3.5), "position": car_pos + Vector3(0, 0.42, 0), "y_rot": 0.0})
+						parked_windows.append({"size": Vector3(1.38, 0.36, 1.65), "position": car_pos + Vector3(0, 0.85, -0.1), "y_rot": 0.0})
+						_invisible_collider(parent, car_pos + Vector3(0, 0.65, 0), Vector3(1.85, 1.3, 3.6))
+				2:
+					parking_surfaces.append({"size": Vector3(18, 0.08, 18), "position": pos + Vector3(0, 0.04, 0), "y_rot": 0.0})
+					for garage_x in [-5.7, 0.0, 5.7]:
+						var garage_pos := pos + Vector3(garage_x, 0, 1.8)
+						garage_bodies.append({"size": Vector3(5.0, 2.7, 6.5), "position": garage_pos + Vector3(0, 1.35, 0), "y_rot": 0.0})
+						garage_roofs.append({"size": Vector3(5.3, 0.20, 6.8), "position": garage_pos + Vector3(0, 2.8, 0), "y_rot": 0.0})
+						garage_doors.append({"size": Vector3(4.2, 2.15, 0.10), "position": garage_pos + Vector3(0, 1.1, -3.3), "y_rot": 0.0})
+						_invisible_collider(parent, garage_pos + Vector3(0, 1.35, 0), Vector3(5.0, 2.7, 6.5))
+			count += 1
+	parent.set_meta("pocket_gardens", count)
+	_multimesh_boxes(parent, "CourtyardPaths", CityMaterials.surface("paving"), courtyard_paths)
+	_multimesh_boxes(parent, "LotParking", CityMaterials.surface("asphalt"), parking_surfaces)
+	_multimesh_boxes(parent, "ParkingLines", BusVisual.material(Color("c6c5b8")), parking_lines)
+	_multimesh_boxes(parent, "GardenBeds", CityMaterials.surface("concrete"), planters)
+	_multimesh_boxes(parent, "GardenHedges", BusVisual.material(Color("57704b")), foliage)
+	_multimesh_boxes(parent, "GardenSeats", BusVisual.material(Color("735442")), seats)
+	_multimesh_boxes(parent, "CourtyardTrees", BusVisual.material(Color("694c38")), tree_trunks)
+	_multimesh_boxes(parent, "CourtyardCrowns", BusVisual.material(Color("4d6d47")), tree_crowns)
+	_multimesh_boxes(parent, "ParkedCarBodies", BusVisual.material(Color("6d7875")), parked_cars)
+	_multimesh_boxes(parent, "ParkedCarWindows", BusVisual.material(Color("34484c")), parked_windows)
+	_multimesh_boxes(parent, "GarageRows", CityMaterials.surface("concrete"), garage_bodies)
+	_multimesh_boxes(parent, "GarageRoofs", BusVisual.material(Color("555d5c")), garage_roofs)
+	_multimesh_boxes(parent, "GarageDoors", BusVisual.material(Color("48605e")), garage_doors)
 
 static func _collect_occupied(node: Node, occupied: Array[Rect2]) -> void:
 	if node.name == "GroundBody":
@@ -534,6 +827,17 @@ static func _collect_occupied(node: Node, occupied: Array[Rect2]) -> void:
 		occupied.append(Rect2(Vector2(box.position.x,box.position.z),Vector2(box.size.x,box.size.z)).grow(2.0))
 	for child in node.get_children():
 		_collect_occupied(child,occupied)
+
+static func _collect_major_occupied(node: Node, occupied: Array[Rect2]) -> void:
+	if node.name == "GroundBody":
+		return
+	if node is CollisionShape3D and node.shape is BoxShape3D and node.get_parent() is StaticBody3D:
+		var footprint: float = node.shape.size.x * node.shape.size.z
+		if footprint >= 8.0:
+			var box: AABB = node.global_transform * AABB(-node.shape.size * 0.5, node.shape.size)
+			occupied.append(Rect2(Vector2(box.position.x, box.position.z), Vector2(box.size.x, box.size.z)).grow(2.0))
+	for child in node.get_children():
+		_collect_major_occupied(child, occupied)
 
 static func _place_city_block(parent: Node3D, pos: Vector3, size: Vector3, reserved: Array[Rect2], occupied: Array[Rect2], entries: Array, rng: RandomNumberGenerator) -> void:
 	var lot := Rect2(Vector2(pos.x-size.x/2,pos.z-size.z/2),Vector2(size.x,size.z)).grow(2.0)
@@ -626,7 +930,7 @@ static func _build_trees(parent: Node3D, waypoints: Array[Vector3]) -> void:
 					if pos.distance_to(sign_pos)<4.0:
 						hides_sign=true
 						break
-				if not hides_sign and _clear_of_road(pos, Vector3(1,1,1), waypoints):
+				if not hides_sign and _clear_of_road(pos, Vector3(1,1,1), waypoints) and not is_road_surface(pos, parent.get_meta("road_surfaces", []), 4.5):
 					transforms.append(Transform3D(Basis(), pos + Vector3(0, 0.8, 0)))
 					solid_positions.append(pos + Vector3(0, 1.15, 0))
 

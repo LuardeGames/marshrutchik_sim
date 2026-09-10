@@ -19,7 +19,7 @@ func run() -> void:
 		for j in range(count+1):
 			for lane in [-2.5,2.5]:
 				var p: Vector3 = a.lerp(b,float(j)/count)+side*lane
-				var query := PhysicsRayQueryParameters3D.create(p+Vector3(0,5,0),p-Vector3(0,1,0),1)
+				var query := PhysicsRayQueryParameters3D.create(p+Vector3(0,50,0),p-Vector3(0,1,0),1)
 				var hit := world.get_world_3d().direct_space_state.intersect_ray(query)
 				samples += 1
 				if hit.is_empty() or hit.position.y>0.5:
