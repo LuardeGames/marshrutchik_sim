@@ -72,12 +72,14 @@ static func _build_environment(parent: Node3D) -> void:
 	sky.sky_material = sky_mat
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("bac0c5")
-	env.ambient_light_energy = 0.5
+	# Flattened toward neutral grey (was a noticeably blue-ish "bac0c5") -
+	# the mood is an overcast, drab CIS city, not a cool clear-sky bounce.
+	env.ambient_light_color = Color("b3b3b2")
+	env.ambient_light_energy = 0.62
 	env.fog_enabled = true
-	env.fog_light_color = Color("929da3")
-	env.fog_density = 0.00065
-	env.fog_sky_affect = 0.12
+	env.fog_light_color = Color("999999")
+	env.fog_density = 0.00085
+	env.fog_sky_affect = 0.16
 	env.fog_aerial_perspective = 0.0
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.tonemap_exposure = 0.90
@@ -87,20 +89,26 @@ static func _build_environment(parent: Node3D) -> void:
 	env.ssao_enabled = false
 	env.glow_enabled = false
 	env.adjustment_enabled = true
-	env.adjustment_brightness = 1.0
-	env.adjustment_contrast = 1.16
-	env.adjustment_saturation = 0.82
+	env.adjustment_brightness = 0.98
+	# A gentler contrast/saturation than an earlier pass - "серость":
+	# drab and hazy, not a punchy console crunch that fights the overcast
+	# mood the sky/fog are already going for.
+	env.adjustment_contrast = 1.04
+	env.adjustment_saturation = 0.68
 	env_node.environment = env
 	parent.add_child(env_node)
 
-	# Real shadow-casting sun instead of pure flat ambient - cranked up from
-	# the old shadowless 0.2 so the shadow actually reads against the
-	# overcast ambient instead of disappearing into it.
+	# Real shadow-casting sun, but soft: an overcast sky scatters sunlight
+	# through cloud cover, so its shadow should be a soft, hazy smudge, not
+	# a crisp hard-sun edge. A heavy shadow_blur plus lifting ambient back up
+	# (vs. an earlier, punchier pass) keeps the shadow soft and never pure
+	# black - matches how shadows actually look on a grey day.
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-38, -50, 0)
-	sun.light_energy = 0.95
+	sun.light_energy = 0.8
 	sun.shadow_enabled = true
-	sun.shadow_blur = 1.1
+	sun.shadow_blur = 4.0
+	sun.shadow_opacity = 0.6 # soft/hazy, never a stark black cutout
 	sun.directional_shadow_max_distance = 150.0
 	sun.light_color = Color("d4d9df")
 	parent.add_child(sun)
