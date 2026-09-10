@@ -7,8 +7,8 @@ class_name CameraRig
 
 @export var target: Node3D
 @export var follow_distance: float = 5.6
-@export var follow_height: float = 2.0
-@export var look_height: float = 1.4
+@export var follow_height: float = 2.4
+@export var look_height: float = 1.5
 @export var position_smooth: float = 5.5
 @export var rotation_smooth: float = 6.5
 
