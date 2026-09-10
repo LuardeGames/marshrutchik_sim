@@ -220,6 +220,10 @@ static func _build_parks_and_courtyards(root: Node3D, waypoints: Array[Vector3])
 				# by a wide margin; scaled up to ~4.6m overall.
 				WorldBuilder._box(park, tree_pos + Vector3(0, 1.15, 0), Vector3(0.8, 2.3, 0.8), Color("76533e"), false)
 				_shrub(park, tree_pos + Vector3(0, 3.1, 0), Color("4b704d"), 2.1)
+				# A second, smaller lobe offset to one side - a single sphere
+				# canopy reads as a lollipop, two uneven ones read as a tree.
+				var lobe_off := Vector3(1.1 if int(x + z) % 2 == 0 else -1.1, 0.35, 0.5)
+				_shrub(park, tree_pos + Vector3(0, 3.1, 0) + lobe_off, Color("587a54"), 1.35)
 				WorldBuilder._invisible_collider(park, tree_pos + Vector3(0, 1.7, 0), Vector3(1.3, 3.4, 1.3))
 		WorldBuilder._box(park, Vector3(-5.0, 0.55, 4.0), Vector3(3.0, 0.12, 0.55), Color("735442"), false)
 		WorldBuilder._box(park, Vector3(-5.0, 0.30, 4.0), Vector3(0.10, 0.6, 0.5), Color("596461"), false)
@@ -291,6 +295,7 @@ static func _build_neighborhood_life(root: Node3D, waypoints: Array[Vector3]) ->
 			# don't read as smaller/emptier than the parks next to them.
 			WorldBuilder._box(yard, Vector3(x, 1.15, 6.8), Vector3(0.8, 2.3, 0.8), Color("76533e"), false)
 			_shrub(yard, Vector3(x, 3.1, 6.8), Color("4f704d"), 2.1)
+			_shrub(yard, Vector3(x + (1.1 if x > 0.0 else -1.1), 3.45, 7.3), Color("587a54"), 1.35)
 			WorldBuilder._invisible_collider(yard, Vector3(x, 1.7, 6.8), Vector3(1.3, 3.4, 1.3))
 		courtyard_index += 1
 

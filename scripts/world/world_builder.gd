@@ -280,6 +280,31 @@ static func _multimesh_boxes(parent: Node3D, name: String, material: Material, e
 	inst.name = name
 	parent.add_child(inst)
 
+## Same idea as _multimesh_boxes but with a low-poly sphere instead of a
+## cube - used for tree canopies, which read as jarringly artificial as flat
+## cubes next to every round shrub/foliage sphere elsewhere in the city.
+static func _multimesh_spheres(parent: Node3D, name: String, material: Material, entries: Array) -> void:
+	if entries.is_empty():
+		return
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.5
+	mesh.height = 1.0
+	mesh.radial_segments = 7
+	mesh.rings = 3
+	mm.mesh = mesh
+	mm.instance_count = entries.size()
+	for i in range(entries.size()):
+		var e: Dictionary = entries[i]
+		var basis := Basis.from_euler(Vector3(0, e.y_rot, 0)) * Basis.from_scale(e.size)
+		mm.set_instance_transform(i, Transform3D(basis, e.position))
+	var inst := MultiMeshInstance3D.new()
+	inst.multimesh = mm
+	inst.material_override = material
+	inst.name = name
+	parent.add_child(inst)
+
 static func _build_traffic_lights(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	for idx in [2,7,10]:
 		for neighbor in [(idx-1+waypoints.size())%waypoints.size(),(idx+1)%waypoints.size()]:
@@ -685,6 +710,12 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 			for side: float in [-1.0, 1.0]:
 				var pos: Vector3 = a.lerp(b, (float(i) + 0.5) / float(count)) + perp * side * 22.0
 				var size := Vector3(20, float(rng.randi_range(3, 6)) * FLOOR_HEIGHT, 12) if absf(dir.x) > 0.5 else Vector3(12, float(rng.randi_range(3, 6)) * FLOOR_HEIGHT, 20)
+				# ~1 in 5 of these street-edge slots gets a real Kenney
+				# building model instead of another procedural box - low
+				# enough here that it reads as a real standalone shopfront,
+				# not a skyline gap.
+				if rng.randf() > 0.8 and _place_variety_building(parent, pos, size, reserved, occupied, rng):
+					continue
 				_place_city_block(parent, pos, size, reserved, occupied, front_entries, rng)
 	# Fill the interior and extend beyond the outer avenue - out to just
 	# short of the fixed backdrop skyline (see MAP_MARGIN) so that band isn't
@@ -695,6 +726,12 @@ static func _build_filler(parent: Node3D, waypoints: Array[Vector3], rng: Random
 		for z in range(-770, 471, 46):
 			var pos := Vector3(x,0,z)
 			var size := Vector3(36,float(rng.randi_range(5,12))*FLOOR_HEIGHT,18) if (x/46+z/46)%2==0 else Vector3(18,float(rng.randi_range(5,12))*FLOOR_HEIGHT,36)
+			# A real building model dropped into an occasional interior slot
+			# instead of yet another panelka - a low shopfront/kiosk sitting
+			# in a gap between tall blocks is a normal sight in a real
+			# district, not a mistake.
+			if rng.randf() > 0.88 and _place_variety_building(parent, pos, size, reserved, occupied, rng):
+				continue
 			_place_city_block(parent,pos,size,reserved,occupied,front_entries,rng)
 	_build_backdrop_blocks(back_entries, rng)
 	parent.set_meta("city_buildings",front_entries.size())
@@ -871,6 +908,17 @@ static func _flower_cluster(flowers: Array, center: Vector3, seed_i: int) -> voi
 		var color: Color = FLOWER_COLORS[(seed_i + i) % FLOWER_COLORS.size()]
 		flowers.append({"size": Vector3(0.24, 0.22, 0.24), "position": center + offsets[i] + Vector3(0, 0.04, 0), "y_rot": 0.0, "color": color})
 
+## A single sphere scaled to a tree's canopy still reads as a lollipop -
+## one lopsided second lobe, offset deterministically from the trunk
+## position (no rng available in this pass), breaks the perfect-blob
+## silhouette without needing real foliage geometry.
+static func _leafy_crown(tree_crowns: Array, center: Vector3, radius: float) -> void:
+	tree_crowns.append({"size": Vector3(radius * 2.0, radius * 2.3, radius * 2.0), "position": center, "y_rot": 0.0})
+	var h1 := fmod(absf(center.x * 12.9898 + center.z * 78.233), 1.0)
+	var h2 := fmod(absf(center.x * 39.34 + center.z * 11.71), 1.0)
+	var off := Vector3((h1 - 0.5) * radius * 1.4, radius * 0.2, (h2 - 0.5) * radius * 1.4)
+	tree_crowns.append({"size": Vector3(radius * 1.25, radius * 1.45, radius * 1.25), "position": center + off, "y_rot": 0.0})
+
 ## Turns leftover lots into readable courtyards instead of scattering the
 ## same tiny planter across every empty patch.
 static func _build_pocket_gardens(parent: Node3D) -> void:
@@ -938,7 +986,7 @@ static func _build_pocket_gardens(parent: Node3D) -> void:
 						seats.append({"size": Vector3(2.4, 0.45, 0.65), "position": pos + Vector3(side * 4.6, 0.225, -2.3), "y_rot": 0.0})
 						var tree_pos := pos + Vector3(side * 5.8, 0, -5.5)
 						tree_trunks.append({"size": Vector3(0.7, 2.2, 0.7), "position": tree_pos + Vector3(0, 1.1, 0), "y_rot": 0.0})
-						tree_crowns.append({"size": Vector3(3.5, 4.2, 3.5), "position": tree_pos + Vector3(0, 3.5, 0), "y_rot": 0.0})
+						_leafy_crown(tree_crowns, tree_pos + Vector3(0, 3.5, 0), 1.8)
 						_invisible_collider(parent, tree_pos + Vector3(0, 1.1, 0), Vector3(0.9, 2.2, 0.9))
 				1:
 					parking_surfaces.append({"size": Vector3(20, 0.08, 20), "position": pos + Vector3(0, 0.04, 0), "y_rot": 0.0})
@@ -990,7 +1038,7 @@ static func _build_pocket_gardens(parent: Node3D) -> void:
 			match (int((x + 280) / 11) + int((z + 770) / 11) * 3) % 3:
 				0:
 					tree_trunks.append({"size": Vector3(0.6, 1.9, 0.6), "position": pos + Vector3(0, 0.95, 0), "y_rot": 0.0})
-					tree_crowns.append({"size": Vector3(3.0, 3.6, 3.0), "position": pos + Vector3(0, 3.0, 0), "y_rot": 0.0})
+					_leafy_crown(tree_crowns, pos + Vector3(0, 3.0, 0), 1.55)
 				1:
 					seats.append({"size": Vector3(2.2, 0.42, 0.6), "position": pos + Vector3(0, 0.21, 0), "y_rot": deg_to_rad(90.0) if int(x) % 22 == 0 else 0.0})
 					foliage.append({"size": Vector3(1.6, 0.6, 1.4), "position": pos + Vector3(0, 0.3, 1.6), "y_rot": 0.0})
@@ -1013,7 +1061,7 @@ static func _build_pocket_gardens(parent: Node3D) -> void:
 	_multimesh_colored_boxes(parent, "GardenFlowers", flower_mat, flowers)
 	_multimesh_boxes(parent, "GardenSeats", BusVisual.material(Color("735442")), seats)
 	_multimesh_boxes(parent, "CourtyardTrees", BusVisual.material(Color("694c38")), tree_trunks)
-	_multimesh_boxes(parent, "CourtyardCrowns", BusVisual.material(Color("4d6d47")), tree_crowns)
+	_multimesh_spheres(parent, "CourtyardCrowns", BusVisual.material(Color("4d6d47"), 0.0, 0.95), tree_crowns)
 	_multimesh_boxes(parent, "ParkedCarBodies", BusVisual.material(Color("6d7875"), 0.15, 0.42), parked_cars)
 	_multimesh_boxes(parent, "ParkedCarWindows", BusVisual.material(Color("34484c"), 0.0, 0.12), parked_windows)
 	_multimesh_boxes(parent, "GarageRows", CityMaterials.surface("concrete"), garage_bodies)
@@ -1039,6 +1087,25 @@ static func _collect_major_occupied(node: Node, occupied: Array[Rect2]) -> void:
 			occupied.append(Rect2(Vector2(box.position.x, box.position.z), Vector2(box.size.x, box.size.z)).grow(2.0))
 	for child in node.get_children():
 		_collect_major_occupied(child, occupied)
+
+## Occasionally drops one of the real Kenney building models into a filler
+## slot instead of another procedural box - breaks up the "identical
+## panelka" skyline with a real low-poly shopfront/kiosk silhouette. Returns
+## whether it placed (same lot-overlap rules as _place_city_block, so a
+## caller can fall back to the procedural box on false).
+static func _place_variety_building(parent: Node3D, pos: Vector3, size: Vector3, reserved: Array[Rect2], occupied: Array[Rect2], rng: RandomNumberGenerator) -> bool:
+	var lot := Rect2(Vector2(pos.x-size.x/2,pos.z-size.z/2),Vector2(size.x,size.z)).grow(2.0)
+	for rect in reserved:
+		if lot.intersects(rect):
+			return false
+	for rect in occupied:
+		if lot.intersects(rect):
+			return false
+	occupied.append(lot)
+	var model: String = SHOP_MODELS[rng.randi() % SHOP_MODELS.size()]
+	var y_rot: float = [0.0, PI * 0.5, PI, PI * 1.5][rng.randi() % 4]
+	_model_prop(parent, model, pos, size.x, y_rot)
+	return true
 
 static func _place_city_block(parent: Node3D, pos: Vector3, size: Vector3, reserved: Array[Rect2], occupied: Array[Rect2], entries: Array, rng: RandomNumberGenerator) -> void:
 	var lot := Rect2(Vector2(pos.x-size.x/2,pos.z-size.z/2),Vector2(size.x,size.z)).grow(2.0)
@@ -1178,6 +1245,26 @@ static func _build_trees(parent: Node3D, waypoints: Array[Vector3]) -> void:
 	foliage_mat.roughness = 1.0
 	foliage_inst.material_override = foliage_mat
 	parent.add_child(foliage_inst)
+
+	# A second, smaller lobe offset from center on every tree - one perfect
+	# sphere per tree reads as a lollipop; two overlapping, unevenly sized
+	# ones read as an actual irregular canopy.
+	var foliage2_mm := MultiMesh.new()
+	foliage2_mm.transform_format = MultiMesh.TRANSFORM_3D
+	foliage2_mm.mesh = foliage_mesh
+	foliage2_mm.use_colors = true
+	foliage2_mm.instance_count = transforms.size()
+	for i in range(transforms.size()):
+		var base2: Transform3D = transforms[i]
+		var off := Vector3(rng.randf_range(-1.1, 1.1), rng.randf_range(-0.2, 0.6), rng.randf_range(-1.1, 1.1))
+		var s := rng.randf_range(0.45, 0.7)
+		foliage2_mm.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3(s, s * rng.randf_range(0.9, 1.2), s)), base2.origin + Vector3(0, 2.15, 0) + off))
+		foliage2_mm.set_instance_color(i, Color("546742").lerp(Color("879064"), rng.randf()).srgb_to_linear())
+	var foliage2_inst := MultiMeshInstance3D.new()
+	foliage2_inst.multimesh = foliage2_mm
+	foliage2_inst.material_override = foliage_mat
+	foliage2_inst.name = "TreeFoliageLobes"
+	parent.add_child(foliage2_inst)
 
 	# MultiMesh trees have no per-instance collision. Add cheap primitive
 	# trunks so the player cannot cut through the new greenery or use it as a
